@@ -1,0 +1,86 @@
+type: vertical-stack
+cards:
+  # ── Statut ────────────────────────────────────────────────────
+  - type: entities
+    title: "Contr\u00f4le Parental - Camille"
+    icon: mdi:shield-account
+    entities:
+      - entity: sensor.timekpra_camille_ordinateur
+        name: "Ordinateur"
+      - entity: sensor.timekpra_camille_modifications_en_attente
+        name: "Modifications en attente"
+      - entity: sensor.timekpra_camille_temps_utilise_aujourd_hui
+        name: "Temps utilis\u00e9 aujourd'hui"
+      - entity: sensor.timekpra_camille_temps_utilise_cette_semaine
+        name: "Temps utilis\u00e9 cette semaine"
+
+  # ── Jours autoris\u00e9s ──────────────────────────────────────────
+  - type: entities
+    title: "Jours autoris\u00e9s"
+    icon: mdi:calendar
+    show_header_toggle: false
+    entities:
+      - entity: switch.timekpra_camille_jour_autorise_lundi
+        name: "Lundi"
+      - entity: switch.timekpra_camille_jour_autorise_mardi
+        name: "Mardi"
+      - entity: switch.timekpra_camille_jour_autorise_mercredi
+        name: "Mercredi"
+      - entity: switch.timekpra_camille_jour_autorise_jeudi
+        name: "Jeudi"
+      - entity: switch.timekpra_camille_jour_autorise_vendredi
+        name: "Vendredi"
+      - entity: switch.timekpra_camille_jour_autorise_samedi
+        name: "Samedi"
+      - entity: switch.timekpra_camille_jour_autorise_dimanche
+        name: "Dimanche"
+
+  # ── Horaires ─────────────────────────────────────────────────
+  - type: entities
+    title: "Plage horaire"
+    icon: mdi:clock-outline
+    entities:
+      - entity: number.timekpra_camille_heure_de_debut
+        name: "Heure de d\u00e9but"
+      - entity: number.timekpra_camille_heure_de_fin
+        name: "Heure de fin"
+
+  # ── Limites quotidiennes ─────────────────────────────────────
+  - type: entities
+    title: "Limites quotidiennes"
+    icon: mdi:timer-outline
+    entities:
+      - entity: number.timekpra_camille_limite_lundi
+        name: "Lundi"
+      - entity: number.timekpra_camille_limite_mardi
+        name: "Mardi"
+      - entity: number.timekpra_camille_limite_mercredi
+        name: "Mercredi"
+      - entity: number.timekpra_camille_limite_jeudi
+        name: "Jeudi"
+      - entity: number.timekpra_camille_limite_vendredi
+        name: "Vendredi"
+      - entity: number.timekpra_camille_limite_samedi
+        name: "Samedi"
+      - entity: number.timekpra_camille_limite_dimanche
+        name: "Dimanche"
+
+  # ── Limites globales ─────────────────────────────────────────
+  - type: entities
+    title: "Limites globales"
+    icon: mdi:calendar-clock
+    entities:
+      - entity: number.timekpra_camille_limite_hebdomadaire
+        name: "Limite hebdomadaire"
+      - entity: number.timekpra_camille_limite_mensuelle
+        name: "Limite mensuelle"
+
+  # ── R\u00e9glages ────────────────────────────────────────────────
+  - type: entities
+    title: "R\u00e9glages"
+    icon: mdi:cog
+    entities:
+      - entity: select.timekpra_camille_action_fin_de_temps
+        name: "Action fin de temps"
+      - entity: switch.timekpra_camille_compter_le_temps_inactif
+        name: "Compter le temps inactif"
