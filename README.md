@@ -6,6 +6,8 @@ Intégration Home Assistant pour gérer [Timekpr-nExT](https://mjasnik.gitlab.io
 
 Contrôlez le temps d'écran de vos enfants directement depuis votre dashboard Home Assistant, même quand leur ordinateur est éteint.
 
+![Carte Timekpra](images/screenshot.png)
+
 ## Fonctionnalités
 
 - **Limites quotidiennes** : réglables par jour (Lun-Dim), avec boutons +/- directement dans la carte
