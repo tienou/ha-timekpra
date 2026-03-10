@@ -10,13 +10,18 @@ import asyncssh
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_PATHS = [
+    "/etc/timekpr/timekpra.{user}.conf",
     "/etc/timekpr/timekpr.{user}.conf",
     "/etc/timekpra/timekpra.{user}.conf",
+    "/etc/timekpra/timekpr.{user}.conf",
 ]
 
 TIME_PATHS = [
+    "/var/lib/timekpr/work/timekpra.{user}.time",
+    "/var/lib/timekpr/timekpra.{user}.time",
     "/var/lib/timekpr/timekpr.{user}.time",
     "/var/lib/timekpra/timekpra.{user}.time",
+    "/var/lib/timekpra/timekpr.{user}.time",
 ]
 
 
@@ -96,12 +101,24 @@ class TimekpraSSH:
     # ── Config reading ─────────────────────────────────────────────
 
     async def _find_path(self, user: str, candidates: list[str]) -> str | None:
-        """Find an existing file among candidates."""
+        """Find an existing file among candidates, with filesystem search fallback."""
+        safe_user = _sanitize(user)
+        # Try known paths first
         for template in candidates:
-            path = template.format(user=_sanitize(user))
+            path = template.format(user=safe_user)
             result = await self.execute(self._sudo(f"test -f {path}") + " && echo found")
             if "found" in result:
+                _LOGGER.debug("Found config at known path: %s", path)
                 return path
+        # Fallback: search the filesystem
+        _LOGGER.debug("Known paths failed, searching filesystem for *%s*.conf", safe_user)
+        result = await self.execute(
+            self._sudo(f"find /etc /var/lib -name '*{safe_user}*.conf' -o -name '*{safe_user}*.time' 2>/dev/null")
+        )
+        if result.strip():
+            _LOGGER.info("Filesystem search found: %s", result.strip())
+        else:
+            _LOGGER.warning("No config/time files found for user %s on filesystem", safe_user)
         return None
 
     async def get_config(self, user: str) -> dict[str, str] | None:
