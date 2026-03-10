@@ -19,5 +19,19 @@
     "abort": {
       "already_configured": "This user is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit Timekpra Connection",
+        "data": {
+          "ssh_host": "SSH Host",
+          "ssh_port": "SSH Port",
+          "ssh_user": "SSH Username",
+          "ssh_password": "SSH Password",
+          "target_user": "Timekpra user (child's login name)"
+        }
+      }
+    }
   }
 }
