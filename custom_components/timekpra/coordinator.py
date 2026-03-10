@@ -16,7 +16,7 @@ from .ssh import TimekpraSSH
 
 _LOGGER = logging.getLogger(__name__)
 
-STORAGE_VERSION = 1
+STORAGE_VERSION = 2
 
 
 class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -38,35 +38,38 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.ssh = ssh
         self.target_user = target_user
         # Store key based on host+user (stable across reinstalls)
-        store_key = f"{DOMAIN}_pending_{host}_{target_user}"
+        store_key = f"{DOMAIN}_state_{host}_{target_user}"
         self._store = Store(hass, STORAGE_VERSION, store_key)
         self._pending: dict[str, list] = {}
         self.saved_values: dict[str, Any] = {}
+        self._last_known_data: dict[str, Any] | None = None
 
-    # ── Persistent queue ───────────────────────────────────────────
+    # ── Persistent storage ──────────────────────────────────────────
 
     async def async_load_pending(self) -> None:
-        """Load queued commands and saved values from disk."""
-        data = await self._store.async_load()
-        if isinstance(data, dict):
-            if "pending" in data:
-                # New format: {pending: ..., saved_values: ...}
-                self._pending = data.get("pending", {})
-                self.saved_values = data.get("saved_values", {})
-            else:
-                # Legacy format: plain pending dict
-                self._pending = data
-            if self._pending:
-                _LOGGER.info(
-                    "Loaded %d pending command(s) from storage",
-                    len(self._pending),
-                )
+        """Load state from disk: pending commands, saved values, last data."""
+        raw = await self._store.async_load()
+        if not isinstance(raw, dict):
+            return
 
-    async def _save_pending(self) -> None:
-        """Persist queue and saved values to disk."""
+        self._pending = raw.get("pending", {})
+        self.saved_values = raw.get("saved_values", {})
+        self._last_known_data = raw.get("last_known_data")
+
+        if self._pending:
+            _LOGGER.info(
+                "Loaded %d pending command(s) from storage",
+                len(self._pending),
+            )
+        if self._last_known_data:
+            _LOGGER.debug("Loaded last known config from storage")
+
+    async def _save_state(self) -> None:
+        """Persist everything to disk."""
         await self._store.async_save({
             "pending": dict(self._pending),
             "saved_values": dict(self.saved_values),
+            "last_known_data": self._last_known_data,
         })
 
     async def async_apply(self, method: str, *args: Any) -> None:
@@ -81,15 +84,15 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Success – remove from queue if it was there
             if method in self._pending:
                 del self._pending[method]
-                await self._save_pending()
+                await self._save_state()
         except (OSError, asyncssh.Error):
             _LOGGER.info("Machine offline - queuing %s for later", method)
             self._pending[method] = full_args
-            await self._save_pending()
+            await self._save_state()
         except Exception:
             _LOGGER.exception("Unexpected error running %s", method)
             self._pending[method] = full_args
-            await self._save_pending()
+            await self._save_state()
 
     async def _flush_pending(self) -> None:
         """Replay every queued command. Stops on first connection error."""
@@ -110,11 +113,11 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if flushed:
             for m in flushed:
                 self._pending.pop(m, None)
-            await self._save_pending()
+            await self._save_state()
 
     async def async_save_state(self) -> None:
         """Persist saved_values (called by limit-toggle switches)."""
-        await self._save_pending()
+        await self._save_state()
 
     @property
     def pending_count(self) -> int:
@@ -141,11 +144,19 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception:
             _LOGGER.debug("Cannot reach machine for config read")
 
-        # 3. Build data
+        # 3. Build data (priority: live > previous > stored > defaults)
         if raw_config is not None:
             data = self._process_config(raw_config)
+            # Save as last known good data
+            self._last_known_data = dict(data)
+            await self._save_state()
         elif self.data:
+            # Still in memory from a previous refresh
             data = dict(self.data)
+        elif self._last_known_data:
+            # Restored from disk after HA restart
+            data = dict(self._last_known_data)
+            _LOGGER.debug("Using last known config from storage")
         else:
             data = self._default_data()
 
