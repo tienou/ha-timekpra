@@ -4,6 +4,7 @@ from __future__ import annotations
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import AdGuardHomeAPI
@@ -99,3 +100,74 @@ class AdGuardWhitelistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="ssh",
             data_schema=STEP_SSH_SCHEMA,
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> AdGuardWhitelistOptionsFlow:
+        """Get the options flow handler."""
+        return AdGuardWhitelistOptionsFlow(config_entry)
+
+
+class AdGuardWhitelistOptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow (edit credentials after setup)."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        self._entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, str] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Show the options form pre-filled with current values."""
+        if user_input is not None:
+            self.hass.config_entries.async_update_entry(
+                self._entry, data={**self._entry.data, **user_input}
+            )
+            # Reload the entry so the coordinator picks up new credentials
+            await self.hass.config_entries.async_reload(self._entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        current = self._entry.data
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_ADGUARD_URL,
+                    default=current.get(CONF_ADGUARD_URL, ""),
+                ): str,
+                vol.Required(
+                    CONF_ADGUARD_USER,
+                    default=current.get(CONF_ADGUARD_USER, ""),
+                ): str,
+                vol.Required(
+                    CONF_ADGUARD_PASSWORD,
+                    default=current.get(CONF_ADGUARD_PASSWORD, ""),
+                ): str,
+                vol.Required(
+                    CONF_CLIENT_IP,
+                    default=current.get(CONF_CLIENT_IP, ""),
+                ): str,
+                vol.Required(
+                    CONF_SSH_ENABLED,
+                    default=current.get(CONF_SSH_ENABLED, False),
+                ): bool,
+                vol.Optional(
+                    CONF_SSH_HOST,
+                    default=current.get(CONF_SSH_HOST, ""),
+                ): str,
+                vol.Optional(
+                    CONF_SSH_PORT,
+                    default=current.get(CONF_SSH_PORT, 22),
+                ): int,
+                vol.Optional(
+                    CONF_SSH_USER,
+                    default=current.get(CONF_SSH_USER, ""),
+                ): str,
+                vol.Optional(
+                    CONF_SSH_PASSWORD,
+                    default=current.get(CONF_SSH_PASSWORD, ""),
+                ): str,
+            }
+        )
+
+        return self.async_show_form(step_id="init", data_schema=schema)

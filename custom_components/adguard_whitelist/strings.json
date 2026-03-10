@@ -29,5 +29,24 @@
     "abort": {
       "already_configured": "This client IP is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit Settings",
+        "description": "Modify AdGuard Home and SSH settings.",
+        "data": {
+          "adguard_url": "AdGuard Home URL",
+          "adguard_user": "Username",
+          "adguard_password": "Password",
+          "client_ip": "Client IP address",
+          "ssh_enabled": "Enable Firefox sync",
+          "ssh_host": "SSH host",
+          "ssh_port": "SSH port",
+          "ssh_user": "SSH username",
+          "ssh_password": "SSH password"
+        }
+      }
+    }
   }
 }
