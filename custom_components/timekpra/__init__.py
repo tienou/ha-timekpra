@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -21,6 +23,20 @@ from .ssh import TimekpraSSH
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.NUMBER, Platform.SWITCH, Platform.SELECT, Platform.SENSOR]
+
+CARD_URL = f"/{DOMAIN}/timekpra-card.js"
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Register the static path for the card JS file."""
+    hass.http.register_static_path(
+        CARD_URL,
+        str(Path(__file__).parent / "www" / "timekpra-card.js"),
+        cache_headers=False,
+    )
+    add_extra_js_url(hass, CARD_URL)
+    hass.data.setdefault(DOMAIN, {})
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

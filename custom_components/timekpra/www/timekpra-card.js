@@ -1,0 +1,417 @@
+const CARD_VERSION = "1.0.0";
+
+class TimekpraCard extends HTMLElement {
+  static get properties() {
+    return { hass: {}, config: {} };
+  }
+
+  static getConfigElement() {
+    return document.createElement("timekpra-card-editor");
+  }
+
+  static getStubConfig() {
+    return { target_user: "camille" };
+  }
+
+  setConfig(config) {
+    if (!config.target_user) {
+      throw new Error("Veuillez définir target_user");
+    }
+    this.config = config;
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _prefix() {
+    return `timekpra_${this.config.target_user}`;
+  }
+
+  _entity(domain, suffix) {
+    return `${domain}.${this._prefix()}_${suffix}`;
+  }
+
+  _state(entityId) {
+    if (!this._hass || !this._hass.states[entityId]) return null;
+    return this._hass.states[entityId];
+  }
+
+  _stateValue(entityId) {
+    const s = this._state(entityId);
+    return s ? s.state : "indisponible";
+  }
+
+  _toggle(entityId) {
+    const state = this._state(entityId);
+    if (!state) return;
+    this._hass.callService("switch", state.state === "on" ? "turn_off" : "turn_on", {
+      entity_id: entityId,
+    });
+  }
+
+  _setNumber(entityId, value) {
+    this._hass.callService("number", "set_value", {
+      entity_id: entityId,
+      value: parseFloat(value),
+    });
+  }
+
+  _setSelect(entityId, option) {
+    this._hass.callService("select", "select_option", {
+      entity_id: entityId,
+      option: option,
+    });
+  }
+
+  _fireEvent(entityId) {
+    const event = new Event("hass-more-info", { bubbles: true, composed: true });
+    event.detail = { entityId };
+    this.dispatchEvent(event);
+  }
+
+  _render() {
+    if (!this.config || !this._hass) return;
+
+    const p = this._prefix();
+    const days = [
+      { key: "lundi", label: "Lun" },
+      { key: "mardi", label: "Mar" },
+      { key: "mercredi", label: "Mer" },
+      { key: "jeudi", label: "Jeu" },
+      { key: "vendredi", label: "Ven" },
+      { key: "samedi", label: "Sam" },
+      { key: "dimanche", label: "Dim" },
+    ];
+
+    const online = this._stateValue(this._entity("sensor", "ordinateur"));
+    const pending = this._stateValue(this._entity("sensor", "modifications_en_attente"));
+    const timeToday = this._stateValue(this._entity("sensor", "temps_utilise_aujourd_hui"));
+    const timeWeek = this._stateValue(this._entity("sensor", "temps_utilise_cette_semaine"));
+    const isOnline = online === "En ligne";
+
+    const hourStart = this._stateValue(this._entity("number", "heure_de_debut"));
+    const hourEnd = this._stateValue(this._entity("number", "heure_de_fin"));
+
+    const dailyLimitActive = this._stateValue(this._entity("switch", "limites_quotidiennes_actives")) === "on";
+    const weeklyLimitActive = this._stateValue(this._entity("switch", "limite_hebdomadaire_active")) === "on";
+    const monthlyLimitActive = this._stateValue(this._entity("switch", "limite_mensuelle_active")) === "on";
+    const weeklyLimit = this._stateValue(this._entity("number", "limite_hebdomadaire"));
+    const monthlyLimit = this._stateValue(this._entity("number", "limite_mensuelle"));
+
+    const lockoutType = this._stateValue(this._entity("select", "action_fin_de_temps"));
+    const trackInactive = this._stateValue(this._entity("switch", "compter_le_temps_inactif")) === "on";
+
+    const user = this.config.target_user;
+    const title = this.config.title || `Contrôle Parental - ${user.charAt(0).toUpperCase() + user.slice(1)}`;
+
+    // Build day toggles
+    let dayTogglesHtml = days.map((d) => {
+      const eid = this._entity("switch", `jour_autorise_${d.key}`);
+      const isOn = this._stateValue(eid) === "on";
+      return `<div class="day-chip ${isOn ? "active" : ""}" data-toggle="${eid}">${d.label}</div>`;
+    }).join("");
+
+    // Build daily limits
+    let dailyLimitsHtml = "";
+    if (dailyLimitActive) {
+      dailyLimitsHtml = days.map((d) => {
+        const eid = this._entity("number", `limite_${d.key}`);
+        const val = this._stateValue(eid);
+        const displayVal = val !== "indisponible" ? `${val} min` : "-";
+        return `<div class="limit-row" data-more-info="${eid}">
+          <span class="limit-label">${d.label}</span>
+          <span class="limit-value">${displayVal}</span>
+        </div>`;
+      }).join("");
+    }
+
+    // Lockout options
+    const lockoutOptions = ["lock", "suspend", "shutdown"];
+    const lockoutLabels = { lock: "Verrouiller", suspend: "Suspendre", shutdown: "Éteindre" };
+    const lockoutSelectId = this._entity("select", "action_fin_de_temps");
+
+    // Format time
+    const formatTime = (val) => {
+      if (val === "indisponible" || val === null || val === "None") return "-";
+      const n = parseInt(val);
+      if (isNaN(n)) return val;
+      const h = Math.floor(n / 60);
+      const m = n % 60;
+      return h > 0 ? `${h}h${m.toString().padStart(2, "0")}` : `${m}min`;
+    };
+
+    this.innerHTML = `
+      <ha-card>
+        <style>
+          .tkp-card { padding: 16px; }
+          .tkp-header {
+            display: flex; align-items: center; gap: 12px;
+            margin-bottom: 16px; padding-bottom: 12px;
+            border-bottom: 1px solid var(--divider-color);
+          }
+          .tkp-header-icon {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: ${isOnline ? "var(--success-color, #4caf50)" : "var(--error-color, #f44336)"};
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 20px;
+          }
+          .tkp-header-info { flex: 1; }
+          .tkp-header-title { font-size: 16px; font-weight: 500; }
+          .tkp-header-status {
+            font-size: 12px;
+            color: ${isOnline ? "var(--success-color, #4caf50)" : "var(--secondary-text-color)"};
+          }
+          .tkp-section {
+            margin-bottom: 16px;
+          }
+          .tkp-section-title {
+            font-size: 13px; font-weight: 500; text-transform: uppercase;
+            color: var(--secondary-text-color); margin-bottom: 8px;
+            display: flex; align-items: center; gap: 6px;
+          }
+          .tkp-stats {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+            margin-bottom: 16px;
+          }
+          .tkp-stat {
+            background: var(--card-background-color, var(--ha-card-background));
+            border: 1px solid var(--divider-color);
+            border-radius: 12px; padding: 12px; text-align: center;
+            cursor: pointer;
+          }
+          .tkp-stat:hover { border-color: var(--primary-color); }
+          .tkp-stat-value { font-size: 20px; font-weight: 600; }
+          .tkp-stat-label { font-size: 11px; color: var(--secondary-text-color); }
+          .day-chips {
+            display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;
+          }
+          .day-chip {
+            padding: 6px 10px; border-radius: 16px; font-size: 12px; font-weight: 500;
+            cursor: pointer; user-select: none; transition: all 0.2s;
+            background: var(--disabled-color, #e0e0e0); color: var(--secondary-text-color);
+          }
+          .day-chip.active {
+            background: var(--primary-color); color: white;
+          }
+          .day-chip:hover { opacity: 0.8; }
+          .tkp-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 0; border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.06));
+          }
+          .tkp-row:last-child { border-bottom: none; }
+          .tkp-row-label { font-size: 14px; }
+          .tkp-row-value { font-size: 14px; font-weight: 500; }
+          .limit-row {
+            display: flex; justify-content: space-between; padding: 4px 8px;
+            font-size: 13px; cursor: pointer; border-radius: 4px;
+          }
+          .limit-row:hover { background: var(--secondary-background-color); }
+          .limit-label { color: var(--primary-text-color); }
+          .limit-value { font-weight: 500; }
+          .tkp-toggle {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 0; cursor: pointer;
+          }
+          .tkp-toggle-label { font-size: 14px; }
+          .tkp-toggle-switch {
+            width: 36px; height: 20px; border-radius: 10px; position: relative;
+            transition: background 0.2s; cursor: pointer;
+          }
+          .tkp-toggle-switch.on { background: var(--primary-color); }
+          .tkp-toggle-switch.off { background: var(--disabled-color, #ccc); }
+          .tkp-toggle-switch::after {
+            content: ""; position: absolute; top: 2px;
+            width: 16px; height: 16px; border-radius: 50%; background: white;
+            transition: left 0.2s;
+          }
+          .tkp-toggle-switch.on::after { left: 18px; }
+          .tkp-toggle-switch.off::after { left: 2px; }
+          .tkp-pending-badge {
+            background: var(--warning-color, #ff9800); color: white;
+            border-radius: 10px; padding: 2px 8px; font-size: 11px;
+          }
+        </style>
+
+        <div class="tkp-card">
+          <!-- Header -->
+          <div class="tkp-header">
+            <div class="tkp-header-icon">
+              <ha-icon icon="${isOnline ? "mdi:desktop-classic" : "mdi:desktop-classic-off"}"></ha-icon>
+            </div>
+            <div class="tkp-header-info">
+              <div class="tkp-header-title">${title}</div>
+              <div class="tkp-header-status">
+                ${isOnline ? "En ligne" : "Hors ligne"}
+                ${parseInt(pending) > 0 ? `<span class="tkp-pending-badge">${pending} en attente</span>` : ""}
+              </div>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="tkp-stats">
+            <div class="tkp-stat" data-more-info="${this._entity("sensor", "temps_utilise_aujourd_hui")}">
+              <div class="tkp-stat-value">${formatTime(timeToday)}</div>
+              <div class="tkp-stat-label">Aujourd'hui</div>
+            </div>
+            <div class="tkp-stat" data-more-info="${this._entity("sensor", "temps_utilise_cette_semaine")}">
+              <div class="tkp-stat-value">${formatTime(timeWeek)}</div>
+              <div class="tkp-stat-label">Cette semaine</div>
+            </div>
+          </div>
+
+          <!-- Days -->
+          <div class="tkp-section">
+            <div class="tkp-section-title"><ha-icon icon="mdi:calendar" style="--mdc-icon-size:16px"></ha-icon> Jours autorisés</div>
+            <div class="day-chips">${dayTogglesHtml}</div>
+          </div>
+
+          <!-- Hours -->
+          <div class="tkp-section">
+            <div class="tkp-section-title"><ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:16px"></ha-icon> Plage horaire</div>
+            <div class="tkp-row" data-more-info="${this._entity("number", "heure_de_debut")}">
+              <span class="tkp-row-label">Début</span>
+              <span class="tkp-row-value">${hourStart !== "indisponible" ? hourStart + "h" : "-"}</span>
+            </div>
+            <div class="tkp-row" data-more-info="${this._entity("number", "heure_de_fin")}">
+              <span class="tkp-row-label">Fin</span>
+              <span class="tkp-row-value">${hourEnd !== "indisponible" ? hourEnd + "h" : "-"}</span>
+            </div>
+          </div>
+
+          <!-- Daily limits -->
+          <div class="tkp-section">
+            <div class="tkp-section-title"><ha-icon icon="mdi:timer-outline" style="--mdc-icon-size:16px"></ha-icon> Limites quotidiennes</div>
+            <div class="tkp-toggle" data-toggle="${this._entity("switch", "limites_quotidiennes_actives")}">
+              <span class="tkp-toggle-label">Activer</span>
+              <div class="tkp-toggle-switch ${dailyLimitActive ? "on" : "off"}"></div>
+            </div>
+            ${dailyLimitsHtml}
+          </div>
+
+          <!-- Weekly / Monthly limits -->
+          <div class="tkp-section">
+            <div class="tkp-section-title"><ha-icon icon="mdi:calendar-clock" style="--mdc-icon-size:16px"></ha-icon> Limites globales</div>
+            <div class="tkp-toggle" data-toggle="${this._entity("switch", "limite_hebdomadaire_active")}">
+              <span class="tkp-toggle-label">Limite hebdomadaire</span>
+              <div class="tkp-toggle-switch ${weeklyLimitActive ? "on" : "off"}"></div>
+            </div>
+            ${weeklyLimitActive ? `<div class="limit-row" data-more-info="${this._entity("number", "limite_hebdomadaire")}"><span class="limit-label">Hebdomadaire</span><span class="limit-value">${weeklyLimit}h</span></div>` : ""}
+            <div class="tkp-toggle" data-toggle="${this._entity("switch", "limite_mensuelle_active")}">
+              <span class="tkp-toggle-label">Limite mensuelle</span>
+              <div class="tkp-toggle-switch ${monthlyLimitActive ? "on" : "off"}"></div>
+            </div>
+            ${monthlyLimitActive ? `<div class="limit-row" data-more-info="${this._entity("number", "limite_mensuelle")}"><span class="limit-label">Mensuelle</span><span class="limit-value">${monthlyLimit}h</span></div>` : ""}
+          </div>
+
+          <!-- Settings -->
+          <div class="tkp-section">
+            <div class="tkp-section-title"><ha-icon icon="mdi:cog" style="--mdc-icon-size:16px"></ha-icon> Réglages</div>
+            <div class="tkp-row" data-more-info="${lockoutSelectId}">
+              <span class="tkp-row-label">Action fin de temps</span>
+              <span class="tkp-row-value">${lockoutLabels[lockoutType] || lockoutType}</span>
+            </div>
+            <div class="tkp-toggle" data-toggle="${this._entity("switch", "compter_le_temps_inactif")}">
+              <span class="tkp-toggle-label">Compter le temps inactif</span>
+              <div class="tkp-toggle-switch ${trackInactive ? "on" : "off"}"></div>
+            </div>
+          </div>
+        </div>
+      </ha-card>
+    `;
+
+    // Bind events
+    this.querySelectorAll("[data-toggle]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._toggle(el.dataset.toggle);
+      });
+    });
+
+    this.querySelectorAll("[data-more-info]").forEach((el) => {
+      el.style.cursor = "pointer";
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._fireEvent(el.dataset.moreInfo);
+      });
+    });
+  }
+
+  getCardSize() {
+    return 8;
+  }
+}
+
+// ── Config editor ──────────────────────────────────────────────────
+
+class TimekpraCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+  }
+
+  _render() {
+    this.innerHTML = `
+      <div style="padding: 16px;">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-weight: 500;">
+            Utilisateur cible (login de l'enfant)
+          </label>
+          <input type="text" id="target_user"
+            value="${this._config.target_user || ""}"
+            style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box;"
+            placeholder="camille">
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 4px; font-weight: 500;">
+            Titre (optionnel)
+          </label>
+          <input type="text" id="title"
+            value="${this._config.title || ""}"
+            style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box;"
+            placeholder="Contrôle Parental - Camille">
+        </div>
+      </div>
+    `;
+
+    this.querySelector("#target_user").addEventListener("input", (e) => {
+      this._config = { ...this._config, target_user: e.target.value };
+      this._dispatch();
+    });
+
+    this.querySelector("#title").addEventListener("input", (e) => {
+      this._config = { ...this._config, title: e.target.value };
+      this._dispatch();
+    });
+  }
+
+  _dispatch() {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", { detail: { config: this._config } })
+    );
+  }
+}
+
+customElements.define("timekpra-card", TimekpraCard);
+customElements.define("timekpra-card-editor", TimekpraCardEditor);
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "timekpra-card",
+  name: "Timekpra - Contrôle Parental",
+  description: "Carte de gestion du contrôle parental Timekpr-nExT",
+  preview: true,
+  documentationURL: "https://github.com/tienou/ha-timekpra",
+});
+
+console.info(
+  `%c TIMEKPRA-CARD %c v${CARD_VERSION} `,
+  "color: white; background: #2962ff; font-weight: bold; padding: 2px 4px; border-radius: 4px 0 0 4px;",
+  "color: #2962ff; background: white; font-weight: bold; padding: 2px 4px; border-radius: 0 4px 4px 0; border: 1px solid #2962ff;"
+);
