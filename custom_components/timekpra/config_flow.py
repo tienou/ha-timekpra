@@ -13,7 +13,6 @@ from .const import (
     CONF_TARGET_USER,
     DOMAIN,
 )
-from .ssh import TimekpraSSH
 
 DATA_SCHEMA = vol.Schema(
     {
@@ -38,24 +37,14 @@ class TimekpraConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            ssh = TimekpraSSH(
-                host=user_input[CONF_SSH_HOST],
-                port=user_input[CONF_SSH_PORT],
-                username=user_input[CONF_SSH_USER],
-                password=user_input[CONF_SSH_PASSWORD],
+            await self.async_set_unique_id(
+                f"timekpra_{user_input[CONF_SSH_HOST]}_{user_input[CONF_TARGET_USER]}"
             )
-
-            if not await ssh.test_connection():
-                errors["base"] = "cannot_connect"
-            else:
-                await self.async_set_unique_id(
-                    f"timekpra_{user_input[CONF_SSH_HOST]}_{user_input[CONF_TARGET_USER]}"
-                )
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=f"Timekpra - {user_input[CONF_TARGET_USER]}",
-                    data=user_input,
-                )
+            self._abort_if_unique_id_configured()
+            return self.async_create_entry(
+                title=f"Timekpra - {user_input[CONF_TARGET_USER]}",
+                data=user_input,
+            )
 
         return self.async_show_form(
             step_id="user",
