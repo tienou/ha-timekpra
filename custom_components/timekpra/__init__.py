@@ -29,24 +29,48 @@ CARD_JS = "timekpra-card.js"
 LOCAL_CARD_URL = f"/local/{CARD_JS}"
 
 
-async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up Timekpra and deploy the custom Lovelace card."""
-    hass.data.setdefault(DOMAIN, {})
-
-    # Copy card JS to HA www/ folder (served at /local/)
+async def _deploy_card(hass: HomeAssistant) -> None:
+    """Copy the JS card to www/ and register it as a Lovelace resource."""
+    # 1. Copy JS to www/
     src = Path(__file__).parent / "www" / CARD_JS
-    dst = Path(hass.config.path("www"))
-    dst.mkdir(exist_ok=True)
-    dst = dst / CARD_JS
+    dst_dir = Path(hass.config.path("www"))
+    dst_dir.mkdir(exist_ok=True)
+    dst = dst_dir / CARD_JS
     try:
         shutil.copy2(str(src), str(dst))
         _LOGGER.debug("Timekpra card copied to %s", dst)
     except Exception:
         _LOGGER.warning("Could not copy card JS to %s", dst)
+        return
 
-    # Register the JS so it loads on every page
+    # 2. Load JS on every page
     add_extra_js_url(hass, LOCAL_CARD_URL)
 
+    # 3. Register as Lovelace resource (so it shows in card picker)
+    try:
+        resources = hass.data.get("lovelace", {}).get("resources")
+        if resources is not None:
+            existing = [
+                r for r in resources.async_items()
+                if LOCAL_CARD_URL in r.get("url", "")
+            ]
+            if not existing:
+                await resources.async_create_item(
+                    {"res_type": "module", "url": LOCAL_CARD_URL}
+                )
+                _LOGGER.info("Registered Timekpra card as Lovelace resource")
+            else:
+                _LOGGER.debug("Timekpra card resource already registered")
+        else:
+            _LOGGER.debug("Lovelace resources not available")
+    except Exception:
+        _LOGGER.debug("Could not auto-register Lovelace resource", exc_info=True)
+
+
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Set up Timekpra and deploy the custom Lovelace card."""
+    hass.data.setdefault(DOMAIN, {})
+    await _deploy_card(hass)
     return True
 
 
