@@ -26,7 +26,6 @@ class AdGuardWhitelistCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         api: AdGuardHomeAPI,
         client_ip: str,
-        entry_id: str,
         ssh_client: Any | None = None,
     ) -> None:
         super().__init__(
@@ -38,7 +37,9 @@ class AdGuardWhitelistCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.api = api
         self.client_ip = client_ip
         self.ssh_client = ssh_client
-        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_pending_{entry_id}")
+        # Key on client_ip so pending commands survive entry reinstalls
+        safe_ip = client_ip.replace(".", "_")
+        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_pending_{safe_ip}")
         self._pending_ssh: list[dict[str, str]] = []
 
     # ── Persistent SSH queue ────────────────────────────────────

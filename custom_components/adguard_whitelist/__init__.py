@@ -143,7 +143,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     coordinator = AdGuardWhitelistCoordinator(
-        hass, api, entry.data[CONF_CLIENT_IP], entry.entry_id, ssh_client
+        hass, api, entry.data[CONF_CLIENT_IP], ssh_client
     )
     await coordinator.async_load_pending()
     await coordinator.async_config_entry_first_refresh()
