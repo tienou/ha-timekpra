@@ -23,10 +23,10 @@ from .const import (
 
 STEP_ADGUARD_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_ADGUARD_URL, default="http://192.168.8.32:3000"): str,
+        vol.Required(CONF_ADGUARD_URL): str,
         vol.Required(CONF_ADGUARD_USER, default="admin"): str,
         vol.Required(CONF_ADGUARD_PASSWORD): str,
-        vol.Required(CONF_CLIENT_IP, default="192.168.8.50"): str,
+        vol.Required(CONF_CLIENT_IP): str,
     }
 )
 
@@ -57,17 +57,18 @@ class AdGuardWhitelistConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            session = async_get_clientsession(self.hass)
+            session = async_get_clientsession(self.hass, verify_ssl=False)
             api = AdGuardHomeAPI(
                 user_input[CONF_ADGUARD_URL],
                 user_input[CONF_ADGUARD_USER],
                 user_input[CONF_ADGUARD_PASSWORD],
                 session,
             )
-            if await api.test_connection():
+            ok, error_key = await api.test_connection()
+            if ok:
                 self._adguard_data = user_input
                 return await self.async_step_ssh()
-            errors["base"] = "cannot_connect"
+            errors["base"] = error_key
 
         return self.async_show_form(
             step_id="user",

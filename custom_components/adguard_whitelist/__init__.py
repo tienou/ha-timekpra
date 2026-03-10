@@ -85,7 +85,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up AdGuard Whitelist from a config entry."""
-    session = async_get_clientsession(hass)
+    session = async_get_clientsession(hass, verify_ssl=False)
     api = AdGuardHomeAPI(
         url=entry.data[CONF_ADGUARD_URL],
         username=entry.data[CONF_ADGUARD_USER],

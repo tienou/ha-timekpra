@@ -7,6 +7,8 @@ import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
 
+_TIMEOUT = aiohttp.ClientTimeout(total=10)
+
 
 class AdGuardConnectionError(Exception):
     """Cannot reach AdGuard Home."""
@@ -36,6 +38,8 @@ class AdGuardHomeAPI:
             async with self._session.get(
                 f"{self._base_url}/control/filtering/status",
                 auth=self._auth,
+                timeout=_TIMEOUT,
+                ssl=False,
             ) as resp:
                 if resp.status == 401:
                     raise AdGuardAuthError("Invalid credentials")
@@ -53,6 +57,8 @@ class AdGuardHomeAPI:
                 f"{self._base_url}/control/filtering/set_rules",
                 auth=self._auth,
                 json={"rules": rules},
+                timeout=_TIMEOUT,
+                ssl=False,
             ) as resp:
                 if resp.status == 401:
                     raise AdGuardAuthError("Invalid credentials")
@@ -62,13 +68,23 @@ class AdGuardHomeAPI:
         except aiohttp.ClientError as err:
             raise AdGuardConnectionError(str(err)) from err
 
-    async def test_connection(self) -> bool:
-        """Validate credentials by fetching filtering status."""
+    async def test_connection(self) -> tuple[bool, str]:
+        """Validate credentials by fetching filtering status.
+
+        Returns (success, error_key) where error_key is "" on success,
+        "cannot_connect" or "invalid_auth".
+        """
         try:
             await self.get_filtering_status()
-            return True
-        except (AdGuardConnectionError, AdGuardAuthError):
-            return False
+            return True, ""
+        except AdGuardAuthError as err:
+            _LOGGER.error("AdGuard auth failed: %s", err)
+            return False, "invalid_auth"
+        except AdGuardConnectionError as err:
+            _LOGGER.error("AdGuard connection failed to %s: %s", self._base_url, err)
+            return False, "cannot_connect"
         except Exception:
-            _LOGGER.exception("Unexpected error testing AdGuard connection")
-            return False
+            _LOGGER.exception(
+                "Unexpected error testing AdGuard connection to %s", self._base_url
+            )
+            return False, "cannot_connect"

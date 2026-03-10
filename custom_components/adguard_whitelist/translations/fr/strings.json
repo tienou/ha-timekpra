@@ -9,6 +9,10 @@
           "adguard_user": "Nom d'utilisateur",
           "adguard_password": "Mot de passe",
           "client_ip": "Adresse IP du client"
+        },
+        "data_description": {
+          "adguard_url": "ex: http://192.168.1.1:3000 ou http://192.168.1.1:80",
+          "client_ip": "IP de l'appareil à gérer (ex: 192.168.1.50)"
         }
       },
       "ssh": {
@@ -24,7 +28,8 @@
       }
     },
     "error": {
-      "cannot_connect": "Impossible de se connecter à AdGuard Home. Vérifiez l'URL et les identifiants."
+      "cannot_connect": "Impossible de se connecter à AdGuard Home. Vérifiez l'URL et le port.",
+      "invalid_auth": "Nom d'utilisateur ou mot de passe incorrect."
     },
     "abort": {
       "already_configured": "Cette adresse IP est déjà configurée."
