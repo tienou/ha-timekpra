@@ -121,10 +121,13 @@ class AdGuardWhitelistOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Show the options form pre-filled with current values."""
         if user_input is not None:
-            self.hass.config_entries.async_update_entry(
-                self._entry, data={**self._entry.data, **user_input}
-            )
-            # Reload the entry so the coordinator picks up new credentials
+            data = {**self._entry.data, **user_input}
+            if not user_input.get(CONF_SSH_ENABLED):
+                data.pop(CONF_SSH_HOST, None)
+                data.pop(CONF_SSH_PORT, None)
+                data.pop(CONF_SSH_USER, None)
+                data.pop(CONF_SSH_PASSWORD, None)
+            self.hass.config_entries.async_update_entry(self._entry, data=data)
             await self.hass.config_entries.async_reload(self._entry.entry_id)
             return self.async_create_entry(title="", data={})
 
