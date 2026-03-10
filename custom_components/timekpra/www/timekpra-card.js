@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.0.0";
+const CARD_VERSION = "1.1.0";
 
 class TimekpraCard extends HTMLElement {
   static get properties() {
@@ -59,6 +59,18 @@ class TimekpraCard extends HTMLElement {
     });
   }
 
+  _adjustNumber(entityId, delta) {
+    const state = this._state(entityId);
+    if (!state) return;
+    const current = parseFloat(state.state);
+    if (isNaN(current)) return;
+    const min = state.attributes.min || 0;
+    const max = state.attributes.max || 1440;
+    const step = state.attributes.step || 1;
+    const newVal = Math.min(max, Math.max(min, current + delta));
+    this._setNumber(entityId, newVal);
+  }
+
   _setSelect(entityId, option) {
     this._hass.callService("select", "select_option", {
       entity_id: entityId,
@@ -92,14 +104,18 @@ class TimekpraCard extends HTMLElement {
     const timeWeek = this._stateValue(this._entity("sensor", "temps_utilise_cette_semaine"));
     const isOnline = online === "En ligne";
 
-    const hourStart = this._stateValue(this._entity("number", "heure_de_debut"));
-    const hourEnd = this._stateValue(this._entity("number", "heure_de_fin"));
+    const hourStartEid = this._entity("number", "heure_de_debut");
+    const hourEndEid = this._entity("number", "heure_de_fin");
+    const hourStart = this._stateValue(hourStartEid);
+    const hourEnd = this._stateValue(hourEndEid);
 
     const dailyLimitActive = this._stateValue(this._entity("switch", "limites_quotidiennes_actives")) === "on";
     const weeklyLimitActive = this._stateValue(this._entity("switch", "limite_hebdomadaire_active")) === "on";
     const monthlyLimitActive = this._stateValue(this._entity("switch", "limite_mensuelle_active")) === "on";
-    const weeklyLimit = this._stateValue(this._entity("number", "limite_hebdomadaire"));
-    const monthlyLimit = this._stateValue(this._entity("number", "limite_mensuelle"));
+    const weeklyLimitEid = this._entity("number", "limite_hebdomadaire");
+    const monthlyLimitEid = this._entity("number", "limite_mensuelle");
+    const weeklyLimit = this._stateValue(weeklyLimitEid);
+    const monthlyLimit = this._stateValue(monthlyLimitEid);
 
     const lockoutType = this._stateValue(this._entity("select", "action_fin_de_temps"));
     const trackInactive = this._stateValue(this._entity("switch", "compter_le_temps_inactif")) === "on";
@@ -114,16 +130,21 @@ class TimekpraCard extends HTMLElement {
       return `<div class="day-chip ${isOn ? "active" : ""}" data-toggle="${eid}">${d.label}</div>`;
     }).join("");
 
-    // Build daily limits
+    // Build daily limits with +/- controls
     let dailyLimitsHtml = "";
     if (dailyLimitActive) {
       dailyLimitsHtml = days.map((d) => {
         const eid = this._entity("number", `limite_${d.key}`);
         const val = this._stateValue(eid);
-        const displayVal = val !== "indisponible" ? `${val} min` : "-";
-        return `<div class="limit-row" data-more-info="${eid}">
+        const numVal = parseInt(val);
+        const displayVal = val === "indisponible" ? "-" : (numVal >= 1440 ? "Illimité" : `${val} min`);
+        return `<div class="limit-row">
           <span class="limit-label">${d.label}</span>
-          <span class="limit-value">${displayVal}</span>
+          <div class="limit-controls">
+            <button class="tkp-btn" data-adjust="${eid}" data-delta="-15">-</button>
+            <span class="limit-value" data-more-info="${eid}">${displayVal}</span>
+            <button class="tkp-btn" data-adjust="${eid}" data-delta="15">+</button>
+          </div>
         </div>`;
       }).join("");
     }
@@ -132,6 +153,9 @@ class TimekpraCard extends HTMLElement {
     const lockoutOptions = ["lock", "suspend", "shutdown"];
     const lockoutLabels = { lock: "Verrouiller", suspend: "Suspendre", shutdown: "Éteindre" };
     const lockoutSelectId = this._entity("select", "action_fin_de_temps");
+    const lockoutOptionsHtml = lockoutOptions.map((opt) =>
+      `<option value="${opt}" ${lockoutType === opt ? "selected" : ""}>${lockoutLabels[opt] || opt}</option>`
+    ).join("");
 
     // Format time
     const formatTime = (val) => {
@@ -164,9 +188,7 @@ class TimekpraCard extends HTMLElement {
             font-size: 12px;
             color: ${isOnline ? "var(--success-color, #4caf50)" : "var(--secondary-text-color)"};
           }
-          .tkp-section {
-            margin-bottom: 16px;
-          }
+          .tkp-section { margin-bottom: 16px; }
           .tkp-section-title {
             font-size: 13px; font-weight: 500; text-transform: uppercase;
             color: var(--secondary-text-color); margin-bottom: 8px;
@@ -193,9 +215,7 @@ class TimekpraCard extends HTMLElement {
             cursor: pointer; user-select: none; transition: all 0.2s;
             background: var(--disabled-color, #e0e0e0); color: var(--secondary-text-color);
           }
-          .day-chip.active {
-            background: var(--primary-color); color: white;
-          }
+          .day-chip.active { background: var(--primary-color); color: white; }
           .day-chip:hover { opacity: 0.8; }
           .tkp-row {
             display: flex; align-items: center; justify-content: space-between;
@@ -204,13 +224,28 @@ class TimekpraCard extends HTMLElement {
           .tkp-row:last-child { border-bottom: none; }
           .tkp-row-label { font-size: 14px; }
           .tkp-row-value { font-size: 14px; font-weight: 500; }
-          .limit-row {
-            display: flex; justify-content: space-between; padding: 4px 8px;
-            font-size: 13px; cursor: pointer; border-radius: 4px;
+          .tkp-row-controls {
+            display: flex; align-items: center; gap: 8px;
           }
-          .limit-row:hover { background: var(--secondary-background-color); }
+          .tkp-btn {
+            width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--divider-color);
+            background: var(--card-background-color, var(--ha-card-background));
+            color: var(--primary-text-color); font-size: 16px; font-weight: 600;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s; padding: 0; line-height: 1;
+          }
+          .tkp-btn:hover { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+          .tkp-btn:active { transform: scale(0.9); }
+          .limit-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 4px 0; font-size: 13px;
+          }
+          .limit-controls {
+            display: flex; align-items: center; gap: 6px;
+          }
           .limit-label { color: var(--primary-text-color); }
-          .limit-value { font-weight: 500; }
+          .limit-value { font-weight: 500; min-width: 55px; text-align: center; cursor: pointer; }
+          .limit-value:hover { color: var(--primary-color); }
           .tkp-toggle {
             display: flex; align-items: center; justify-content: space-between;
             padding: 8px 0; cursor: pointer;
@@ -233,6 +268,13 @@ class TimekpraCard extends HTMLElement {
             background: var(--warning-color, #ff9800); color: white;
             border-radius: 10px; padding: 2px 8px; font-size: 11px;
           }
+          .tkp-select {
+            background: var(--card-background-color, var(--ha-card-background));
+            border: 1px solid var(--divider-color); border-radius: 8px;
+            padding: 6px 10px; font-size: 13px; color: var(--primary-text-color);
+            cursor: pointer; outline: none;
+          }
+          .tkp-select:hover { border-color: var(--primary-color); }
         </style>
 
         <div class="tkp-card">
@@ -271,13 +313,21 @@ class TimekpraCard extends HTMLElement {
           <!-- Hours -->
           <div class="tkp-section">
             <div class="tkp-section-title"><ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:16px"></ha-icon> Plage horaire</div>
-            <div class="tkp-row" data-more-info="${this._entity("number", "heure_de_debut")}">
+            <div class="tkp-row">
               <span class="tkp-row-label">Début</span>
-              <span class="tkp-row-value">${hourStart !== "indisponible" ? hourStart + "h" : "-"}</span>
+              <div class="tkp-row-controls">
+                <button class="tkp-btn" data-adjust="${hourStartEid}" data-delta="-1">-</button>
+                <span class="tkp-row-value">${hourStart !== "indisponible" ? hourStart + "h" : "-"}</span>
+                <button class="tkp-btn" data-adjust="${hourStartEid}" data-delta="1">+</button>
+              </div>
             </div>
-            <div class="tkp-row" data-more-info="${this._entity("number", "heure_de_fin")}">
+            <div class="tkp-row">
               <span class="tkp-row-label">Fin</span>
-              <span class="tkp-row-value">${hourEnd !== "indisponible" ? hourEnd + "h" : "-"}</span>
+              <div class="tkp-row-controls">
+                <button class="tkp-btn" data-adjust="${hourEndEid}" data-delta="-1">-</button>
+                <span class="tkp-row-value">${hourEnd !== "indisponible" ? hourEnd + "h" : "-"}</span>
+                <button class="tkp-btn" data-adjust="${hourEndEid}" data-delta="1">+</button>
+              </div>
             </div>
           </div>
 
@@ -298,20 +348,36 @@ class TimekpraCard extends HTMLElement {
               <span class="tkp-toggle-label">Limite hebdomadaire</span>
               <div class="tkp-toggle-switch ${weeklyLimitActive ? "on" : "off"}"></div>
             </div>
-            ${weeklyLimitActive ? `<div class="limit-row" data-more-info="${this._entity("number", "limite_hebdomadaire")}"><span class="limit-label">Hebdomadaire</span><span class="limit-value">${weeklyLimit}h</span></div>` : ""}
+            ${weeklyLimitActive ? `<div class="limit-row">
+              <span class="limit-label">Hebdomadaire</span>
+              <div class="limit-controls">
+                <button class="tkp-btn" data-adjust="${weeklyLimitEid}" data-delta="-1">-</button>
+                <span class="limit-value" data-more-info="${weeklyLimitEid}">${parseInt(weeklyLimit) >= 168 ? "Illimité" : weeklyLimit + "h"}</span>
+                <button class="tkp-btn" data-adjust="${weeklyLimitEid}" data-delta="1">+</button>
+              </div>
+            </div>` : ""}
             <div class="tkp-toggle" data-toggle="${this._entity("switch", "limite_mensuelle_active")}">
               <span class="tkp-toggle-label">Limite mensuelle</span>
               <div class="tkp-toggle-switch ${monthlyLimitActive ? "on" : "off"}"></div>
             </div>
-            ${monthlyLimitActive ? `<div class="limit-row" data-more-info="${this._entity("number", "limite_mensuelle")}"><span class="limit-label">Mensuelle</span><span class="limit-value">${monthlyLimit}h</span></div>` : ""}
+            ${monthlyLimitActive ? `<div class="limit-row">
+              <span class="limit-label">Mensuelle</span>
+              <div class="limit-controls">
+                <button class="tkp-btn" data-adjust="${monthlyLimitEid}" data-delta="-1">-</button>
+                <span class="limit-value" data-more-info="${monthlyLimitEid}">${parseInt(monthlyLimit) >= 744 ? "Illimité" : monthlyLimit + "h"}</span>
+                <button class="tkp-btn" data-adjust="${monthlyLimitEid}" data-delta="1">+</button>
+              </div>
+            </div>` : ""}
           </div>
 
           <!-- Settings -->
           <div class="tkp-section">
             <div class="tkp-section-title"><ha-icon icon="mdi:cog" style="--mdc-icon-size:16px"></ha-icon> Réglages</div>
-            <div class="tkp-row" data-more-info="${lockoutSelectId}">
+            <div class="tkp-row">
               <span class="tkp-row-label">Action fin de temps</span>
-              <span class="tkp-row-value">${lockoutLabels[lockoutType] || lockoutType}</span>
+              <select class="tkp-select" data-select="${lockoutSelectId}">
+                ${lockoutOptionsHtml}
+              </select>
             </div>
             <div class="tkp-toggle" data-toggle="${this._entity("switch", "compter_le_temps_inactif")}">
               <span class="tkp-toggle-label">Compter le temps inactif</span>
@@ -322,7 +388,7 @@ class TimekpraCard extends HTMLElement {
       </ha-card>
     `;
 
-    // Bind events
+    // Bind toggle events
     this.querySelectorAll("[data-toggle]").forEach((el) => {
       el.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -330,11 +396,28 @@ class TimekpraCard extends HTMLElement {
       });
     });
 
+    // Bind +/- buttons
+    this.querySelectorAll("[data-adjust]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._adjustNumber(el.dataset.adjust, parseInt(el.dataset.delta));
+      });
+    });
+
+    // Bind more-info clicks
     this.querySelectorAll("[data-more-info]").forEach((el) => {
       el.style.cursor = "pointer";
       el.addEventListener("click", (e) => {
         e.stopPropagation();
         this._fireEvent(el.dataset.moreInfo);
+      });
+    });
+
+    // Bind select dropdowns
+    this.querySelectorAll("[data-select]").forEach((el) => {
+      el.addEventListener("change", (e) => {
+        e.stopPropagation();
+        this._setSelect(el.dataset.select, e.target.value);
       });
     });
   }
