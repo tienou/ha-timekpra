@@ -63,13 +63,14 @@ class TimekpraSSH:
                 client_keys=[],
             ) as conn:
                 result = await conn.run(command, check=False)
-                rc = getattr(result, "returncode", None) or getattr(result, "exit_status", None)
-                if rc and rc != 0:
-                    _LOGGER.warning(
-                        "Command exited with %s: %s | stderr: %s",
-                        rc, command, result.stderr,
-                    )
-                return result.stdout or ""
+                # Log actual attributes for debugging
+                _LOGGER.debug(
+                    "SSH result type=%s attrs=%s",
+                    type(result).__name__,
+                    [a for a in dir(result) if not a.startswith("_")],
+                )
+                stdout = getattr(result, "stdout", None) or ""
+                return str(stdout)
         except asyncssh.PermissionDenied as err:
             _LOGGER.error("SSH auth failed (wrong password?): %s", err)
             raise
