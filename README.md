@@ -1,83 +1,99 @@
-# Timekpra - Contr\u00f4le Parental pour Home Assistant
+# Timekpra - Contrôle Parental pour Home Assistant
 
-Int\u00e9gration Home Assistant pour g\u00e9rer [Timekpr-nExT](https://mjasnik.gitlab.io/timekpr-next/) (contr\u00f4le parental Linux) \u00e0 distance via SSH.
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-## Fonctionnalit\u00e9s
+Intégration Home Assistant pour gérer [Timekpr-nExT](https://mjasnik.gitlab.io/timekpr-next/) (contrôle parental Linux) à distance via SSH.
 
-- **Limites quotidiennes** : slider par jour de la semaine (en minutes)
-- **Limite hebdomadaire / mensuelle** : en heures
-- **Plage horaire** : heure de d\u00e9but et fin d'acc\u00e8s autoris\u00e9
-- **Jours autoris\u00e9s** : toggle par jour
-- **Type de verrouillage** : lock / suspend / shutdown
+Contrôlez le temps d'écran de vos enfants directement depuis votre dashboard Home Assistant, même quand leur ordinateur est éteint.
+
+## Fonctionnalités
+
+- **Limites quotidiennes** : réglables par jour (Lun-Dim), avec boutons +/- directement dans la carte
+- **Limite hebdomadaire / mensuelle** : en heures, avec affichage "Illimité" quand désactivé
+- **Plage horaire** : heure de début et fin d'accès autorisé
+- **Jours autorisés** : toggle par jour de la semaine
+- **Type de verrouillage** : lock / suspend / shutdown (menu déroulant)
 - **Suivi du temps inactif** : on/off
-- **Capteurs** : temps utilis\u00e9 aujourd'hui, cette semaine
+- **Capteurs** : temps utilisé aujourd'hui et cette semaine
 - **Statut** : ordinateur en ligne / hors ligne
-- **File d'attente offline** : les modifications sont mises en attente si l'ordinateur est \u00e9teint et appliqu\u00e9es automatiquement au rallumage (persistant entre red\u00e9marrages HA)
+- **File d'attente offline** : les modifications sont mises en attente si l'ordinateur est éteint et appliquées automatiquement au rallumage (persistant entre redémarrages HA)
+- **Carte Lovelace intégrée** : carte personnalisée installée automatiquement avec contrôles interactifs
 
 ## Installation
 
-### Via HACS (recommand\u00e9)
+### Via HACS (recommandé)
 
 1. Ouvrir HACS dans Home Assistant
-2. Cliquer sur **Int\u00e9grations** > **\u22ee** (menu) > **D\u00e9p\u00f4ts personnalis\u00e9s**
-3. Ajouter l'URL du d\u00e9p\u00f4t : `https://github.com/tienou/ha-timekpra`
-4. Cat\u00e9gorie : **Int\u00e9gration**
-5. Installer **Timekpra - Contr\u00f4le Parental**
-6. Red\u00e9marrer Home Assistant
+2. Cliquer sur **Intégrations** > **⋮** (menu) > **Dépôts personnalisés**
+3. Ajouter l'URL du dépôt : `https://github.com/tienou/ha-timekpra`
+4. Catégorie : **Intégration**
+5. Installer **Timekpra - Contrôle Parental**
+6. Redémarrer Home Assistant
 
 ### Manuelle
 
-Copier le dossier `custom_components/timekpra/` dans le r\u00e9pertoire `config/custom_components/` de votre Home Assistant.
+Copier le dossier `custom_components/timekpra/` dans le répertoire `config/custom_components/` de votre Home Assistant, puis redémarrer.
 
 ## Configuration
 
-### Pr\u00e9requis sur la machine de l'enfant (Ubuntu / Linux)
+### Prérequis sur la machine de l'enfant (Ubuntu / Linux)
 
-- **Timekpr-nExT** install\u00e9 (`sudo apt install timekpr-next`)
-- **SSH** activ\u00e9 (`sudo apt install openssh-server`)
-- Un compte utilisateur avec acc\u00e8s **sudo** (ex: `parents`)
+- **Timekpr-nExT** installé (`sudo apt install timekpr-next`)
+- **SSH** activé (`sudo apt install openssh-server`)
+- Un compte utilisateur avec accès **sudo** (ex: `parents`)
 
-**Option A** - Sudo avec mot de passe (plus simple) :
-
-Remplissez les champs *Utilisateur admin* et *Mot de passe admin* dans la configuration. Le mot de passe sera utilis\u00e9 automatiquement pour les commandes sudo.
-
-**Option B** - Sudo sans mot de passe :
-
-Cr\u00e9er `/etc/sudoers.d/timekpra-ha` :
-
-```
-VOTRE_USER ALL=(ALL) NOPASSWD: /usr/bin/timekpra, /bin/cat /etc/timekpr/*, /bin/cat /var/lib/timekpr/*, /bin/test *
-```
+> **Astuce** : Le mot de passe SSH est utilisé automatiquement pour les commandes `sudo`. Pas besoin de configuration sudoers spéciale.
 
 ### Ajout dans Home Assistant
 
-1. **Param\u00e8tres** > **Appareils et services** > **Ajouter une int\u00e9gration**
+1. **Paramètres** > **Appareils et services** > **Ajouter une intégration**
 2. Chercher **Timekpra**
 3. Remplir :
-   - **H\u00f4te SSH** : IP de la machine de l'enfant
-   - **Port SSH** : 22
-   - **Utilisateur SSH** : un compte avec acc\u00e8s SSH
-   - **Mot de passe SSH** : son mot de passe
+   - **Hôte SSH** : IP de la machine de l'enfant (ex: `192.168.1.50`)
+   - **Port SSH** : `22` (par défaut)
+   - **Utilisateur SSH** : compte avec accès sudo (ex: `parents`)
+   - **Mot de passe SSH** : mot de passe du compte
    - **Utilisateur Timekpra** : le login de l'enfant (ex: `camille`)
-   - **Utilisateur admin** *(optionnel)* : compte admin (ex: `parents`)
-   - **Mot de passe admin** *(optionnel)* : mot de passe du compte admin
+
+### Modifier la configuration
+
+Pour changer les identifiants SSH après l'installation :
+**Paramètres** > **Appareils et services** > **Timekpra** > **Configurer**
 
 ## Carte Lovelace
 
-Un fichier `lovelace-card.yaml` est fourni dans le dossier de l'int\u00e9gration. Pour l'utiliser :
+La carte est installée automatiquement. Pour l'ajouter à un dashboard :
 
-1. Dashboard > **Modifier** > **Ajouter une carte** > **Manuel**
-2. Coller le contenu de `lovelace-card.yaml`
-3. Ajuster les `entity_id` si n\u00e9cessaire
+1. Dashboard > **Modifier** > **Ajouter une carte**
+2. Chercher **Timekpra** dans la liste des cartes
+3. La carte affiche tous les contrôles avec des boutons **+/-** pour modifier les valeurs directement
 
-## Entit\u00e9s cr\u00e9\u00e9es
+### Fonctionnalités de la carte
 
-| Type | Entit\u00e9s |
+- **Limites quotidiennes** : boutons ±15 min par jour, affiche "Illimité" à 1440 min
+- **Limite hebdomadaire** : boutons ±1h, affiche "Illimité" à 168h
+- **Limite mensuelle** : boutons ±1h, affiche "Illimité" à 744h
+- **Plage horaire** : boutons ±1h pour début et fin
+- **Jours autorisés** : toggles on/off
+- **Type de verrouillage** : menu déroulant (lock/suspend/shutdown)
+- **Statut en temps réel** : en ligne/hors ligne + commandes en attente
+
+## Entités créées
+
+| Type | Entités |
 |------|---------|
-| **Number** | Limite Lundi\u2026Dimanche, Limite hebdo, Limite mensuelle, Heure d\u00e9but/fin |
-| **Switch** | Jour autoris\u00e9 Lundi\u2026Dimanche, Compter le temps inactif |
+| **Number** | Limite Lundi…Dimanche, Limite hebdo, Limite mensuelle, Heure début/fin |
+| **Switch** | Jour autorisé Lundi…Dimanche, Compter le temps inactif, Limite hebdo on/off, Limite mensuelle on/off |
 | **Select** | Action fin de temps (lock/suspend/shutdown) |
-| **Sensor** | Temps utilis\u00e9 aujourd'hui, Temps utilis\u00e9 cette semaine, Ordinateur (en ligne/hors ligne), Modifications en attente |
+| **Sensor** | Temps utilisé aujourd'hui, Temps utilisé cette semaine, Ordinateur (en ligne/hors ligne), Modifications en attente |
+
+## Fonctionnement technique
+
+- Connexion SSH via `asyncssh` avec authentification par mot de passe
+- Lecture de la config depuis `/var/lib/timekpr/config/timekpr.{user}.conf`
+- Écriture via la CLI `timekpra` (ex: `timekpra --settimelimits`)
+- Rafraîchissement toutes les 5 minutes (configurable)
+- File d'attente persistante pour les commandes quand la machine cible est hors ligne
 
 ## Licence
 
