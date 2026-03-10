@@ -10,18 +10,16 @@ import asyncssh
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_PATHS = [
+    "/var/lib/timekpr/config/timekpr.{user}.conf",
     "/etc/timekpr/timekpra.{user}.conf",
     "/etc/timekpr/timekpr.{user}.conf",
     "/etc/timekpra/timekpra.{user}.conf",
-    "/etc/timekpra/timekpr.{user}.conf",
 ]
 
 TIME_PATHS = [
+    "/var/lib/timekpr/work/{user}.time",
     "/var/lib/timekpr/work/timekpra.{user}.time",
-    "/var/lib/timekpr/timekpra.{user}.time",
-    "/var/lib/timekpr/timekpr.{user}.time",
     "/var/lib/timekpra/timekpra.{user}.time",
-    "/var/lib/timekpra/timekpr.{user}.time",
 ]
 
 
