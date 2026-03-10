@@ -37,7 +37,7 @@ async def _deploy_card(hass: HomeAssistant) -> None:
     dst_dir.mkdir(exist_ok=True)
     dst = dst_dir / CARD_JS
     try:
-        shutil.copy2(str(src), str(dst))
+        await hass.async_add_executor_job(shutil.copy2, str(src), str(dst))
         _LOGGER.debug("Timekpra card copied to %s", dst)
     except Exception:
         _LOGGER.warning("Could not copy card JS to %s", dst)
