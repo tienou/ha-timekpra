@@ -115,21 +115,15 @@ class AdGuardWhitelistOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._entry = config_entry
+        self._updated: dict = {}
 
     async def async_step_init(
         self, user_input: dict[str, str] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Show the options form pre-filled with current values."""
+        """Step 1: AdGuard Home settings."""
         if user_input is not None:
-            data = {**self._entry.data, **user_input}
-            if not user_input.get(CONF_SSH_ENABLED):
-                data.pop(CONF_SSH_HOST, None)
-                data.pop(CONF_SSH_PORT, None)
-                data.pop(CONF_SSH_USER, None)
-                data.pop(CONF_SSH_PASSWORD, None)
-            self.hass.config_entries.async_update_entry(self._entry, data=data)
-            await self.hass.config_entries.async_reload(self._entry.entry_id)
-            return self.async_create_entry(title="", data={})
+            self._updated = user_input
+            return await self.async_step_ssh()
 
         current = self._entry.data
         schema = vol.Schema(
@@ -150,6 +144,28 @@ class AdGuardWhitelistOptionsFlow(config_entries.OptionsFlow):
                     CONF_CLIENT_IP,
                     default=current.get(CONF_CLIENT_IP, ""),
                 ): str,
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
+
+    async def async_step_ssh(
+        self, user_input: dict[str, str] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Step 2: SSH settings."""
+        if user_input is not None:
+            data = {**self._entry.data, **self._updated, **user_input}
+            if not user_input.get(CONF_SSH_ENABLED):
+                data.pop(CONF_SSH_HOST, None)
+                data.pop(CONF_SSH_PORT, None)
+                data.pop(CONF_SSH_USER, None)
+                data.pop(CONF_SSH_PASSWORD, None)
+            self.hass.config_entries.async_update_entry(self._entry, data=data)
+            await self.hass.config_entries.async_reload(self._entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        current = self._entry.data
+        schema = vol.Schema(
+            {
                 vol.Required(
                     CONF_SSH_ENABLED,
                     default=current.get(CONF_SSH_ENABLED, False),
@@ -172,5 +188,4 @@ class AdGuardWhitelistOptionsFlow(config_entries.OptionsFlow):
                 ): str,
             }
         )
-
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="ssh", data_schema=schema)

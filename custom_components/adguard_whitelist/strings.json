@@ -33,13 +33,17 @@
   "options": {
     "step": {
       "init": {
-        "title": "Edit Settings",
-        "description": "Modify AdGuard Home and SSH settings.",
+        "title": "AdGuard Home Settings",
         "data": {
           "adguard_url": "AdGuard Home URL",
           "adguard_user": "Username",
           "adguard_password": "Password",
-          "client_ip": "Client IP address",
+          "client_ip": "Client IP address"
+        }
+      },
+      "ssh": {
+        "title": "Firefox Bookmarks (Optional)",
+        "data": {
           "ssh_enabled": "Enable Firefox sync",
           "ssh_host": "SSH host",
           "ssh_port": "SSH port",
