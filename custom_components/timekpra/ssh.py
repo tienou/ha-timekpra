@@ -51,7 +51,7 @@ class TimekpraSSH:
         return f"echo '{safe_pw}' | sudo -S {command}"
 
     async def execute(self, command: str) -> str:
-        """Execute a command via SSH."""
+        """Execute a command via SSH using create_process for reliable output."""
         _LOGGER.debug(
             "SSH connecting to %s@%s:%s",
             self._username, self._host, self._port,
@@ -65,15 +65,10 @@ class TimekpraSSH:
                 known_hosts=None,
                 client_keys=[],
             ) as conn:
-                result = await conn.run(command, check=False)
-                # Log actual attributes for debugging
-                _LOGGER.debug(
-                    "SSH result type=%s attrs=%s",
-                    type(result).__name__,
-                    [a for a in dir(result) if not a.startswith("_")],
-                )
-                stdout = getattr(result, "stdout", None) or ""
-                return str(stdout)
+                proc = await conn.create_process(command)
+                stdout_data = await proc.stdout.read()
+                await proc.wait_closed()
+                return stdout_data or ""
         except asyncssh.PermissionDenied as err:
             _LOGGER.error("SSH auth failed (wrong password?): %s", err)
             raise
