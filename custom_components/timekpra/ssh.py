@@ -63,12 +63,11 @@ class TimekpraSSH:
                 client_keys=[],
             ) as conn:
                 result = await conn.run(command, check=False)
-                if result.returncode != 0:
+                rc = getattr(result, "returncode", None) or getattr(result, "exit_status", None)
+                if rc and rc != 0:
                     _LOGGER.warning(
                         "Command exited with %s: %s | stderr: %s",
-                        result.returncode,
-                        command,
-                        result.stderr,
+                        rc, command, result.stderr,
                     )
                 return result.stdout or ""
         except asyncssh.PermissionDenied as err:
