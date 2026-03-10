@@ -23,7 +23,7 @@ from .const import (
 
 STEP_ADGUARD_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_ADGUARD_URL, default="http://192.168.8.1:3000"): str,
+        vol.Required(CONF_ADGUARD_URL, default="http://192.168.8.32:3000"): str,
         vol.Required(CONF_ADGUARD_USER, default="admin"): str,
         vol.Required(CONF_ADGUARD_PASSWORD): str,
         vol.Required(CONF_CLIENT_IP, default="192.168.8.50"): str,
