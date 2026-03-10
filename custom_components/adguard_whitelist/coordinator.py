@@ -5,6 +5,8 @@ import logging
 from datetime import timedelta
 from typing import Any
 
+import asyncssh
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -73,8 +75,11 @@ class AdGuardWhitelistCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     await self.ssh_client.remove_bookmark(domain)
                 flushed.append(i)
                 _LOGGER.info("Flushed pending SSH: %s %s", action, domain)
-            except (OSError, Exception) as err:
+            except (OSError, asyncssh.Error) as err:
                 _LOGGER.debug("SSH still offline: %s", err)
+                break
+            except Exception as err:
+                _LOGGER.warning("SSH unexpected error during flush: %s", err)
                 break
 
         if flushed:
@@ -92,8 +97,12 @@ class AdGuardWhitelistCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self.ssh_client.add_bookmark(domain)
             elif action == "remove":
                 await self.ssh_client.remove_bookmark(domain)
-        except (OSError, Exception):
+        except (OSError, asyncssh.Error):
             _LOGGER.info("PC offline — queuing SSH %s %s", action, domain)
+            self._pending_ssh.append({"action": action, "domain": domain})
+            await self._save_pending()
+        except Exception as err:
+            _LOGGER.warning("SSH unexpected error — queuing %s %s: %s", action, domain, err)
             self._pending_ssh.append({"action": action, "domain": domain})
             await self._save_pending()
 
