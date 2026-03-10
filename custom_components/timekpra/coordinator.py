@@ -197,10 +197,9 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Transform raw key=value pairs into structured data."""
         data: dict[str, Any] = {}
 
-        days_str = raw.get("ALLOWED_WEEKDAYS", "1;2;3;4;5;6;7")
-        data["allowed_days"] = [
-            int(d) for d in days_str.split(";") if d.strip().isdigit()
-        ]
+        days_str = raw.get("ALLOWED_WEEKDAYS", "")
+        days = [int(d) for d in days_str.split(";") if d.strip().isdigit()]
+        data["allowed_days"] = days if days else [1, 2, 3, 4, 5, 6, 7]
 
         hours: list[int] = []
         for key in ("ALLOWED_HOURS_ALL", "ALLOWED_HOURS_1", "ALLOWED_HOURS_MON"):
