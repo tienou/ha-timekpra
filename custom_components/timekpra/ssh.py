@@ -55,6 +55,7 @@ class TimekpraSSH:
             username=self._username,
             password=self._password,
             known_hosts=None,
+            client_keys=[],
         ) as conn:
             result = await conn.run(command, check=False)
             if result.exit_status != 0:
