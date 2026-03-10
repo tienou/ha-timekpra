@@ -50,6 +50,8 @@ cards:
     title: "Limites quotidiennes"
     icon: mdi:timer-outline
     entities:
+      - entity: switch.timekpra_camille_limites_quotidiennes_actives
+        name: "Activer les limites quotidiennes"
       - entity: number.timekpra_camille_limite_lundi
         name: "Lundi"
       - entity: number.timekpra_camille_limite_mardi
@@ -70,8 +72,12 @@ cards:
     title: "Limites globales"
     icon: mdi:calendar-clock
     entities:
+      - entity: switch.timekpra_camille_limite_hebdomadaire_active
+        name: "Activer la limite hebdomadaire"
       - entity: number.timekpra_camille_limite_hebdomadaire
         name: "Limite hebdomadaire"
+      - entity: switch.timekpra_camille_limite_mensuelle_active
+        name: "Activer la limite mensuelle"
       - entity: number.timekpra_camille_limite_mensuelle
         name: "Limite mensuelle"
 

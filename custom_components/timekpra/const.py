@@ -23,3 +23,13 @@ DAYS = [
 ]
 
 LOCKOUT_TYPES = ["lock", "suspend", "shutdown"]
+
+# Values that effectively mean "unlimited" in timekpr-next
+UNLIMITED_DAILY = 1440     # 24h in minutes
+UNLIMITED_WEEKLY = 168     # 7 * 24h
+UNLIMITED_MONTHLY = 744    # 31 * 24h
+
+# Defaults when re-enabling limits
+DEFAULT_DAILY_LIMITS = [60, 60, 60, 60, 60, 120, 120]  # 1h lun-ven, 2h sam-dim
+DEFAULT_WEEKLY_LIMIT = 9
+DEFAULT_MONTHLY_LIMIT = 40

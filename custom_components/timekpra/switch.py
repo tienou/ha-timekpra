@@ -8,7 +8,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DAYS, DOMAIN
+from .const import (
+    DAYS,
+    DEFAULT_DAILY_LIMITS,
+    DEFAULT_MONTHLY_LIMIT,
+    DEFAULT_WEEKLY_LIMIT,
+    DOMAIN,
+    UNLIMITED_DAILY,
+    UNLIMITED_MONTHLY,
+    UNLIMITED_WEEKLY,
+)
 from .coordinator import TimekpraCoordinator
 from .entity import TimekpraEntity
 from .ssh import TimekpraSSH
@@ -39,6 +48,11 @@ async def async_setup_entry(
     entities.append(
         TimekpraTrackInactiveSwitch(coordinator, ssh, target_user, entry)
     )
+
+    # Limit enable/disable toggles
+    entities.append(TimekpraDailyLimitToggle(coordinator, target_user, entry))
+    entities.append(TimekpraWeeklyLimitToggle(coordinator, target_user, entry))
+    entities.append(TimekpraMonthlyLimitToggle(coordinator, target_user, entry))
 
     async_add_entities(entities)
 
@@ -107,3 +121,109 @@ class TimekpraTrackInactiveSwitch(TimekpraEntity, SwitchEntity):
         self.coordinator.data["track_inactive"] = False
         self.async_write_ha_state()
         await self.coordinator.async_apply("set_track_inactive", False)
+
+
+# ── Limit toggles ─────────────────────────────────────────────────
+
+
+class TimekpraDailyLimitToggle(TimekpraEntity, SwitchEntity):
+    """Toggle daily time limits on/off.
+
+    OFF = sets all days to 24 h (unlimited).
+    ON  = restores previously saved values.
+    """
+
+    _attr_icon = "mdi:timer-check-outline"
+
+    def __init__(self, coordinator, target_user, entry) -> None:
+        super().__init__(coordinator, target_user)
+        self._attr_unique_id = f"{entry.entry_id}_daily_limit_enabled"
+        self._attr_name = "Limites quotidiennes actives"
+
+    @property
+    def is_on(self) -> bool:
+        limits = self.coordinator.data.get("daily_limits", [])
+        return any(v < UNLIMITED_DAILY for v in limits)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        # Save current limits before disabling
+        current = self.coordinator.data.get("daily_limits", DEFAULT_DAILY_LIMITS)
+        if any(v < UNLIMITED_DAILY for v in current):
+            self.coordinator.saved_values["daily_limits"] = list(current)
+            await self.coordinator.async_save_state()
+        unlimited = [UNLIMITED_DAILY] * 7
+        self.coordinator.data["daily_limits"] = unlimited
+        self.async_write_ha_state()
+        await self.coordinator.async_apply("set_time_limits", unlimited)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        restored = self.coordinator.saved_values.get(
+            "daily_limits", DEFAULT_DAILY_LIMITS
+        )
+        self.coordinator.data["daily_limits"] = list(restored)
+        self.async_write_ha_state()
+        await self.coordinator.async_apply("set_time_limits", list(restored))
+
+
+class TimekpraWeeklyLimitToggle(TimekpraEntity, SwitchEntity):
+    """Toggle weekly time limit on/off."""
+
+    _attr_icon = "mdi:calendar-week-outline"
+
+    def __init__(self, coordinator, target_user, entry) -> None:
+        super().__init__(coordinator, target_user)
+        self._attr_unique_id = f"{entry.entry_id}_weekly_limit_enabled"
+        self._attr_name = "Limite hebdomadaire active"
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.data.get("weekly_limit", 0) < UNLIMITED_WEEKLY
+
+    async def async_turn_off(self, **kwargs) -> None:
+        current = self.coordinator.data.get("weekly_limit", DEFAULT_WEEKLY_LIMIT)
+        if current < UNLIMITED_WEEKLY:
+            self.coordinator.saved_values["weekly_limit"] = current
+            await self.coordinator.async_save_state()
+        self.coordinator.data["weekly_limit"] = UNLIMITED_WEEKLY
+        self.async_write_ha_state()
+        await self.coordinator.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        restored = self.coordinator.saved_values.get(
+            "weekly_limit", DEFAULT_WEEKLY_LIMIT
+        )
+        self.coordinator.data["weekly_limit"] = restored
+        self.async_write_ha_state()
+        await self.coordinator.async_apply("set_time_limit_week", restored)
+
+
+class TimekpraMonthlyLimitToggle(TimekpraEntity, SwitchEntity):
+    """Toggle monthly time limit on/off."""
+
+    _attr_icon = "mdi:calendar-month-outline"
+
+    def __init__(self, coordinator, target_user, entry) -> None:
+        super().__init__(coordinator, target_user)
+        self._attr_unique_id = f"{entry.entry_id}_monthly_limit_enabled"
+        self._attr_name = "Limite mensuelle active"
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.data.get("monthly_limit", 0) < UNLIMITED_MONTHLY
+
+    async def async_turn_off(self, **kwargs) -> None:
+        current = self.coordinator.data.get("monthly_limit", DEFAULT_MONTHLY_LIMIT)
+        if current < UNLIMITED_MONTHLY:
+            self.coordinator.saved_values["monthly_limit"] = current
+            await self.coordinator.async_save_state()
+        self.coordinator.data["monthly_limit"] = UNLIMITED_MONTHLY
+        self.async_write_ha_state()
+        await self.coordinator.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        restored = self.coordinator.saved_values.get(
+            "monthly_limit", DEFAULT_MONTHLY_LIMIT
+        )
+        self.coordinator.data["monthly_limit"] = restored
+        self.async_write_ha_state()
+        await self.coordinator.async_apply("set_time_limit_month", restored)

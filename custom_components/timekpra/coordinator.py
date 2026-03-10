@@ -39,14 +39,21 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.target_user = target_user
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_pending_{entry_id}")
         self._pending: dict[str, list] = {}
+        self.saved_values: dict[str, Any] = {}
 
     # ── Persistent queue ───────────────────────────────────────────
 
     async def async_load_pending(self) -> None:
-        """Load queued commands from disk (call once at startup)."""
+        """Load queued commands and saved values from disk."""
         data = await self._store.async_load()
         if isinstance(data, dict):
-            self._pending = data
+            if "pending" in data:
+                # New format: {pending: ..., saved_values: ...}
+                self._pending = data.get("pending", {})
+                self.saved_values = data.get("saved_values", {})
+            else:
+                # Legacy format: plain pending dict
+                self._pending = data
             if self._pending:
                 _LOGGER.info(
                     "Loaded %d pending command(s) from storage",
@@ -54,8 +61,11 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
     async def _save_pending(self) -> None:
-        """Persist the current queue to disk."""
-        await self._store.async_save(dict(self._pending))
+        """Persist queue and saved values to disk."""
+        await self._store.async_save({
+            "pending": dict(self._pending),
+            "saved_values": dict(self.saved_values),
+        })
 
     async def async_apply(self, method: str, *args: Any) -> None:
         """Execute a timekpra setter, queuing it if the machine is offline.
@@ -99,6 +109,10 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for m in flushed:
                 self._pending.pop(m, None)
             await self._save_pending()
+
+    async def async_save_state(self) -> None:
+        """Persist saved_values (called by limit-toggle switches)."""
+        await self._save_pending()
 
     @property
     def pending_count(self) -> int:
