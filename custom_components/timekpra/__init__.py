@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url
@@ -24,18 +25,28 @@ _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.NUMBER, Platform.SWITCH, Platform.SELECT, Platform.SENSOR]
 
-CARD_URL = f"/{DOMAIN}/timekpra-card.js"
+CARD_JS = "timekpra-card.js"
+LOCAL_CARD_URL = f"/local/{CARD_JS}"
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Register the static path for the card JS file."""
-    hass.http.register_static_path(
-        CARD_URL,
-        str(Path(__file__).parent / "www" / "timekpra-card.js"),
-        cache_headers=False,
-    )
-    add_extra_js_url(hass, CARD_URL)
+    """Set up Timekpra and deploy the custom Lovelace card."""
     hass.data.setdefault(DOMAIN, {})
+
+    # Copy card JS to HA www/ folder (served at /local/)
+    src = Path(__file__).parent / "www" / CARD_JS
+    dst = Path(hass.config.path("www"))
+    dst.mkdir(exist_ok=True)
+    dst = dst / CARD_JS
+    try:
+        shutil.copy2(str(src), str(dst))
+        _LOGGER.debug("Timekpra card copied to %s", dst)
+    except Exception:
+        _LOGGER.warning("Could not copy card JS to %s", dst)
+
+    # Register the JS so it loads on every page
+    add_extra_js_url(hass, LOCAL_CARD_URL)
+
     return True
 
 
