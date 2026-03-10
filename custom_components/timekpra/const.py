@@ -7,8 +7,6 @@ CONF_SSH_PORT = "ssh_port"
 CONF_SSH_USER = "ssh_user"
 CONF_SSH_PASSWORD = "ssh_password"
 CONF_TARGET_USER = "target_user"
-CONF_ADMIN_USER = "admin_user"
-CONF_ADMIN_PASSWORD = "admin_password"
 
 SCAN_INTERVAL_SECONDS = 300
 

@@ -9,9 +9,7 @@
           "ssh_port": "Port SSH",
           "ssh_user": "Utilisateur SSH",
           "ssh_password": "Mot de passe SSH",
-          "target_user": "Utilisateur Timekpra (nom de l'enfant)",
-          "admin_user": "Utilisateur admin (optionnel, ex: parents)",
-          "admin_password": "Mot de passe admin (optionnel, utilis\u00e9 pour sudo)"
+          "target_user": "Utilisateur Timekpra (nom de l'enfant)"
         }
       }
     },

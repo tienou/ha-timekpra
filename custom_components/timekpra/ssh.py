@@ -34,23 +34,18 @@ class TimekpraSSH:
         port: int,
         username: str,
         password: str,
-        sudo_password: str | None = None,
     ) -> None:
         self._host = host
         self._port = port
         self._username = username
         self._password = password
-        self._sudo_password = sudo_password
         self._config_path: str | None = None
         self._time_path: str | None = None
 
     def _sudo(self, command: str) -> str:
-        """Wrap a command with sudo, using password via stdin if available."""
-        if self._sudo_password:
-            # Escape single quotes in password for safe shell embedding
-            safe_pw = self._sudo_password.replace("'", "'\\''")
-            return f"echo '{safe_pw}' | sudo -S {command}"
-        return f"sudo {command}"
+        """Wrap a command with sudo, using SSH password via stdin."""
+        safe_pw = self._password.replace("'", "'\\''")
+        return f"echo '{safe_pw}' | sudo -S {command}"
 
     async def execute(self, command: str) -> str:
         """Execute a command via SSH."""

@@ -8,8 +8,6 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
 from .const import (
-    CONF_ADMIN_PASSWORD,
-    CONF_ADMIN_USER,
     CONF_SSH_HOST,
     CONF_SSH_PASSWORD,
     CONF_SSH_PORT,
@@ -27,15 +25,11 @@ PLATFORMS = [Platform.NUMBER, Platform.SWITCH, Platform.SELECT, Platform.SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Timekpra from a config entry."""
-    # Use admin credentials for SSH connection if provided
-    ssh_user = entry.data.get(CONF_ADMIN_USER) or entry.data[CONF_SSH_USER]
-    ssh_pass = entry.data.get(CONF_ADMIN_PASSWORD) or entry.data[CONF_SSH_PASSWORD]
     ssh = TimekpraSSH(
         host=entry.data[CONF_SSH_HOST],
         port=entry.data[CONF_SSH_PORT],
-        username=ssh_user,
-        password=ssh_pass,
-        sudo_password=entry.data.get(CONF_ADMIN_PASSWORD),
+        username=entry.data[CONF_SSH_USER],
+        password=entry.data[CONF_SSH_PASSWORD],
     )
 
     coordinator = TimekpraCoordinator(

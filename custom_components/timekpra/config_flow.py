@@ -6,8 +6,6 @@ import voluptuous as vol
 from homeassistant import config_entries
 
 from .const import (
-    CONF_ADMIN_PASSWORD,
-    CONF_ADMIN_USER,
     CONF_SSH_HOST,
     CONF_SSH_PASSWORD,
     CONF_SSH_PORT,
@@ -24,8 +22,6 @@ DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_SSH_USER): str,
         vol.Required(CONF_SSH_PASSWORD): str,
         vol.Required(CONF_TARGET_USER, default="camille"): str,
-        vol.Optional(CONF_ADMIN_USER): str,
-        vol.Optional(CONF_ADMIN_PASSWORD): str,
     }
 )
 
@@ -42,15 +38,11 @@ class TimekpraConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Use admin credentials for SSH if provided, otherwise ssh creds
-            ssh_user = user_input.get(CONF_ADMIN_USER) or user_input[CONF_SSH_USER]
-            ssh_pass = user_input.get(CONF_ADMIN_PASSWORD) or user_input[CONF_SSH_PASSWORD]
             ssh = TimekpraSSH(
                 host=user_input[CONF_SSH_HOST],
                 port=user_input[CONF_SSH_PORT],
-                username=ssh_user,
-                password=ssh_pass,
-                sudo_password=user_input.get(CONF_ADMIN_PASSWORD),
+                username=user_input[CONF_SSH_USER],
+                password=user_input[CONF_SSH_PASSWORD],
             )
 
             if not await ssh.test_connection():
