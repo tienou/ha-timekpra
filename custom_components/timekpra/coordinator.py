@@ -27,7 +27,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         hass: HomeAssistant,
         ssh: TimekpraSSH,
         target_user: str,
-        entry_id: str,
+        host: str,
     ) -> None:
         super().__init__(
             hass,
@@ -37,7 +37,9 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.ssh = ssh
         self.target_user = target_user
-        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_pending_{entry_id}")
+        # Store key based on host+user (stable across reinstalls)
+        store_key = f"{DOMAIN}_pending_{host}_{target_user}"
+        self._store = Store(hass, STORAGE_VERSION, store_key)
         self._pending: dict[str, list] = {}
         self.saved_values: dict[str, Any] = {}
 

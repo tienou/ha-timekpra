@@ -84,7 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     coordinator = TimekpraCoordinator(
-        hass, ssh, entry.data[CONF_TARGET_USER], entry.entry_id
+        hass, ssh, entry.data[CONF_TARGET_USER], entry.data[CONF_SSH_HOST]
     )
     await coordinator.async_load_pending()
     await coordinator.async_config_entry_first_refresh()
