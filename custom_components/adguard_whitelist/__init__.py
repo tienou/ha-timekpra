@@ -35,19 +35,18 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR, Platform.SWITCH]
 
 CARD_JS = "adguard-whitelist-card.js"
-CARD_URL = f"/{DOMAIN}/{CARD_JS}"
 LOCAL_CARD_URL = f"/local/{CARD_JS}"
 
 _CARD_REGISTERED = False
 
 
 def _deploy_card(hass: HomeAssistant) -> None:
-    """Copy card JS to www/ and register as Lovelace resource."""
+    """Copy card JS to www/ and register as extra JS resource."""
     global _CARD_REGISTERED
     if _CARD_REGISTERED:
         return
 
-    # 1. Copy to www/ folder (served at /local/)
+    # Copy to www/ folder (served at /local/)
     src = Path(__file__).parent / "www" / CARD_JS
     dst_dir = Path(hass.config.path("www"))
     dst_dir.mkdir(exist_ok=True)
@@ -58,57 +57,11 @@ def _deploy_card(hass: HomeAssistant) -> None:
     except Exception:
         _LOGGER.warning("Could not copy card JS to %s", dst)
 
-    # 2. Register via add_extra_js_url so HA auto-loads it on every page
+    # Register via add_extra_js_url — loads the JS on every HA page
+    # Works reliably because manifest declares "lovelace" as dependency
     add_extra_js_url(hass, LOCAL_CARD_URL)
 
-    # 3. Also register a static path so /adguard_whitelist/card.js works too
-    try:
-        hass.http.register_static_path(
-            CARD_URL, str(src), cache_headers=False
-        )
-    except Exception:
-        pass
-
-    # 4. Register as a Lovelace resource in the resource store
-    hass.async_create_task(_async_register_lovelace_resource(hass))
-
     _CARD_REGISTERED = True
-
-
-async def _async_register_lovelace_resource(hass: HomeAssistant) -> None:
-    """Ensure the card JS is in the Lovelace resource list."""
-    try:
-        # Wait for lovelace resources to be available
-        from homeassistant.components.lovelace import DOMAIN as LOVELACE_DOMAIN
-        from homeassistant.components.lovelace.resources import (
-            ResourceStorageCollection,
-        )
-
-        # Get the lovelace resources collection
-        lovelace_data = hass.data.get(LOVELACE_DOMAIN)
-        if lovelace_data is None:
-            return
-
-        resources = lovelace_data.get("resources")
-        if resources is None or not isinstance(resources, ResourceStorageCollection):
-            return
-
-        # Check if already registered
-        for item in resources.async_items():
-            if LOCAL_CARD_URL in item.get("url", ""):
-                _LOGGER.debug("Lovelace resource already registered")
-                return
-
-        # Add as JS resource
-        await resources.async_create_item(
-            {"res_type": "js", "url": LOCAL_CARD_URL}
-        )
-        _LOGGER.info("Lovelace resource registered: %s", LOCAL_CARD_URL)
-    except Exception as err:
-        _LOGGER.debug(
-            "Could not auto-register Lovelace resource (manual add may be needed): %s",
-            err,
-        )
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
