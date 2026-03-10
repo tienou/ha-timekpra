@@ -63,10 +63,10 @@ class TimekpraSSH:
                 client_keys=[],
             ) as conn:
                 result = await conn.run(command, check=False)
-                if result.exit_status != 0:
+                if result.returncode != 0:
                     _LOGGER.warning(
                         "Command exited with %s: %s | stderr: %s",
-                        result.exit_status,
+                        result.returncode,
                         command,
                         result.stderr,
                     )
