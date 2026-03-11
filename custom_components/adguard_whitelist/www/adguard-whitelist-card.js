@@ -1,4 +1,4 @@
-const CARD_VERSION = "2.1.0";
+const CARD_VERSION = "2.2.0";
 
 /* ── Autocomplete suggestions ────────────────────────────── */
 const DOMAIN_SUGGESTIONS = [
@@ -150,11 +150,13 @@ class AdGuardWhitelistCard extends HTMLElement {
             width: 40px; height: 40px; border-radius: 50%;
             background: var(--primary-color);
             display: flex; align-items: center; justify-content: center;
-            color: white;
+            color: white; font-size: 20px; transition: background 0.3s;
           }
           .aw-header-info { flex: 1; }
           .aw-header-title { font-size: 16px; font-weight: 500; }
-          .aw-header-status { font-size: 12px; color: var(--secondary-text-color); }
+          .aw-header-status {
+            font-size: 12px; transition: color 0.3s;
+          }
           .aw-status-row {
             display: flex; align-items: center; gap: 10px; margin-top: 2px;
             font-size: 11px;
@@ -247,11 +249,11 @@ class AdGuardWhitelistCard extends HTMLElement {
 
         <div class="aw-card">
           <div class="aw-header">
-            <div class="aw-header-icon">
+            <div class="aw-header-icon" id="aw-header-icon">
               <ha-icon icon="mdi:shield-check"></ha-icon>
             </div>
             <div class="aw-header-info">
-              <div class="aw-header-title">${title}${this.config.child_name ? ` — ${this.config.child_name}` : ""}</div>
+              <div class="aw-header-title" id="aw-header-title">${title}${this.config.child_name ? ` — ${this.config.child_name}` : ""}</div>
               <div class="aw-header-status" id="aw-status">
                 ${this.config.client_ip}
               </div>
@@ -565,9 +567,21 @@ class AdGuardWhitelistCard extends HTMLElement {
     const sshOk = sensor.attributes.ssh_reachable || false;
     const sshEnabled = sensor.attributes.ssh_enabled || false;
 
+    // Dynamic header icon color (like timekpra)
+    const headerIcon = this.querySelector("#aw-header-icon");
+    if (headerIcon) {
+      headerIcon.style.background = adguardOk
+        ? "var(--success-color, #4caf50)"
+        : "var(--error-color, #f44336)";
+    }
+
     const statusEl = this.querySelector("#aw-status");
     if (statusEl) {
-      statusEl.innerHTML = this.config.client_ip +
+      statusEl.style.color = adguardOk
+        ? "var(--success-color, #4caf50)"
+        : "var(--secondary-text-color)";
+      const statusText = adguardOk ? "Connecté" : "Hors ligne";
+      statusEl.innerHTML = statusText +
         (pendingSsh > 0 ? ` <span class="aw-pending-badge">${pendingSsh} synchro en attente</span>` : "");
     }
 
