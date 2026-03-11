@@ -1,4 +1,7 @@
-const CARD_VERSION = "2.5.1";
+const CARD_VERSION = "2.5.2";
+
+/* Firefox SVG (mdi:firefox removed from MDI 7.x used by modern HA) */
+const FF_ICON = `<svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align:middle"><path fill="currentColor" d="M9.27 7.94c.34-.98.98-1.93 1.86-2.6-.9.83-1.4 1.81-1.6 2.6-.02.09-.04.18-.05.27.01-.09.02-.18.05-.27m11.17 4.09c-.41-2.53-2.15-4.75-4.02-5.96.58 1.14.88 2.47.88 3.87 0 .82-.12 1.6-.33 2.34-.22.74-.54 1.43-.95 2.06-.83 1.27-2.01 2.24-3.33 2.93.71.11 1.43.07 2.12-.12a6.89 6.89 0 0 0 4.17-3.21c.67-1.2.63-2.56 1.46-1.91M12 22C6.48 22 2 17.52 2 12S6.48 2 12 2s10 4.48 10 10-4.48 10-10 10m0-18C7.03 4 3 8.03 3 12s4.03 8 9 8 9-4.03 9-8-4.03-8-9-8m-1.17 10.19a5.28 5.28 0 0 0 3.16-1.18 5.29 5.29 0 0 0 1.6-2.56 5.3 5.3 0 0 0 .1-2.78c-.21-.91-.64-1.72-1.21-2.42a5.32 5.32 0 0 0-2.1-1.63 5.27 5.27 0 0 0-2.53-.52c-.88.07-1.72.37-2.44.87-.72.49-1.3 1.17-1.67 1.97-.37.8-.51 1.69-.4 2.55.11.87.46 1.69 1 2.36.54.68 1.26 1.19 2.09 1.48.48.17.99.26 1.5.26.3 0 .6-.03.9-.09"/></svg>`;
 
 /* ── Autocomplete suggestions ────────────────────────────── */
 const DOMAIN_SUGGESTIONS = [
@@ -198,7 +201,7 @@ const CARD_STYLES = `
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .aw-site-link:hover, .aw-site-link:active { color: var(--primary-color); text-decoration: underline; }
-  .aw-ff-icon { color: #ff6611; --mdc-icon-size: 18px; flex-shrink: 0; }
+  .aw-ff-icon { color: #ff6611; flex-shrink: 0; display: inline-flex; align-items: center; }
   .aw-ff-add {
     color: var(--disabled-text-color, #999);
     cursor: pointer; opacity: 0.5; transition: all 0.15s;
@@ -375,13 +378,15 @@ class AdGuardWhitelistCard extends HTMLElement {
       this._openAddDialog();
     });
 
-    // Stop ha-card click from bubbling (prevents HA more-info)
-    const haCard = this.shadowRoot.querySelector("ha-card");
-    if (haCard) {
-      haCard.addEventListener("click", (e) => {
+    // Prevent HA more-info on card clicks but allow links to work
+    this.addEventListener("click", (e) => {
+      // Let <a> links through to the WebView/browser
+      const path = e.composedPath();
+      const isLink = path.some((el) => el.tagName === "A");
+      if (!isLink) {
         e.stopPropagation();
-      });
-    }
+      }
+    });
   }
 
   /* ── Autocomplete ──────────────────────────────────────── */
@@ -623,9 +628,9 @@ class AdGuardWhitelistCard extends HTMLElement {
         const hasBm = bookmarked.has(d);
         let ffHtml = "";
         if (hasBm) {
-          ffHtml = '<ha-icon icon="mdi:firefox" class="aw-ff-icon"></ha-icon>';
+          ffHtml = `<span class="aw-ff-icon">${FF_ICON}</span>`;
         } else if (sshEnabled) {
-          ffHtml = `<span class="aw-ff-add" data-bookmark="${d}" title="Créer un raccourci Firefox"><ha-icon icon="mdi:firefox" style="--mdc-icon-size:18px"></ha-icon></span>`;
+          ffHtml = `<span class="aw-ff-add" data-bookmark="${d}" title="Créer un raccourci Firefox">${FF_ICON}</span>`;
         }
         html += `<div class="aw-site-item">
           <span class="aw-site-name">${ffHtml}<a href="https://${d}" target="_blank" rel="noopener" class="aw-site-link">${d}</a></span>
@@ -672,13 +677,7 @@ class AdGuardWhitelistCard extends HTMLElement {
       });
     });
 
-    // Links use <a> tags — Shadow DOM protects from HA event interception
-    // Stop propagation so HA doesn't open more-info dialog
-    container.querySelectorAll(".aw-site-link").forEach((el) => {
-      el.addEventListener("click", (e) => {
-        e.stopPropagation();
-      });
-    });
+    // <a> tags work naturally — event listener on host lets links through
   }
 
   _removeSite(domain) {
