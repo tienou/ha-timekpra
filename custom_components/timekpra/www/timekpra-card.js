@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.2.0";
+const CARD_VERSION = "1.3.0";
 
 class TimekpraCard extends HTMLElement {
   static get properties() {
@@ -11,6 +11,11 @@ class TimekpraCard extends HTMLElement {
 
   static getStubConfig() {
     return { target_user: "camille" };
+  }
+
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
   }
 
   setConfig(config) {
@@ -171,7 +176,7 @@ class TimekpraCard extends HTMLElement {
       return h > 0 ? `${h}h${m.toString().padStart(2, "0")}` : `${m}min`;
     };
 
-    this.innerHTML = `
+    this.shadowRoot.innerHTML = `
       <ha-card>
         <style>
           .tkp-card { padding: 16px; }
@@ -424,7 +429,7 @@ class TimekpraCard extends HTMLElement {
     `;
 
     // Bind toggle events
-    this.querySelectorAll("[data-toggle]").forEach((el) => {
+    this.shadowRoot.querySelectorAll("[data-toggle]").forEach((el) => {
       el.addEventListener("click", (e) => {
         e.stopPropagation();
         this._toggle(el.dataset.toggle);
@@ -432,7 +437,7 @@ class TimekpraCard extends HTMLElement {
     });
 
     // Bind +/- buttons
-    this.querySelectorAll("[data-adjust]").forEach((el) => {
+    this.shadowRoot.querySelectorAll("[data-adjust]").forEach((el) => {
       el.addEventListener("click", (e) => {
         e.stopPropagation();
         this._adjustNumber(el.dataset.adjust, parseInt(el.dataset.delta));
@@ -440,7 +445,7 @@ class TimekpraCard extends HTMLElement {
     });
 
     // Bind more-info clicks
-    this.querySelectorAll("[data-more-info]").forEach((el) => {
+    this.shadowRoot.querySelectorAll("[data-more-info]").forEach((el) => {
       el.style.cursor = "pointer";
       el.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -449,7 +454,7 @@ class TimekpraCard extends HTMLElement {
     });
 
     // Bind select dropdowns
-    this.querySelectorAll("[data-select]").forEach((el) => {
+    this.shadowRoot.querySelectorAll("[data-select]").forEach((el) => {
       el.addEventListener("change", (e) => {
         e.stopPropagation();
         this._setSelect(el.dataset.select, e.target.value);
@@ -465,6 +470,11 @@ class TimekpraCard extends HTMLElement {
 // ── Config editor ──────────────────────────────────────────────────
 
 class TimekpraCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+  }
+
   setConfig(config) {
     this._config = { ...config };
     this._render();
@@ -475,7 +485,7 @@ class TimekpraCardEditor extends HTMLElement {
   }
 
   _render() {
-    this.innerHTML = `
+    this.shadowRoot.innerHTML = `
       <div style="padding: 16px;">
         <div style="margin-bottom: 12px;">
           <label style="display: block; margin-bottom: 4px; font-weight: 500;">
@@ -498,12 +508,12 @@ class TimekpraCardEditor extends HTMLElement {
       </div>
     `;
 
-    this.querySelector("#target_user").addEventListener("input", (e) => {
+    this.shadowRoot.querySelector("#target_user").addEventListener("input", (e) => {
       this._config = { ...this._config, target_user: e.target.value };
       this._dispatch();
     });
 
-    this.querySelector("#title").addEventListener("input", (e) => {
+    this.shadowRoot.querySelector("#title").addEventListener("input", (e) => {
       this._config = { ...this._config, title: e.target.value };
       this._dispatch();
     });
