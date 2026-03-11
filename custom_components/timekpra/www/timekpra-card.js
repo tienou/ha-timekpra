@@ -272,6 +272,13 @@ class TimekpraCard extends HTMLElement {
             background: var(--warning-color, #ff9800); color: white;
             border-radius: 10px; padding: 2px 8px; font-size: 11px;
           }
+          .tkp-service-badge {
+            font-size: 11px; font-weight: 500;
+            color: var(--success-color, #4caf50);
+          }
+          .tkp-service-badge::before {
+            content: "●"; margin-right: 4px; font-size: 8px;
+          }
           .tkp-select {
             background: var(--card-background-color, var(--ha-card-background));
             border: 1px solid var(--divider-color); border-radius: 8px;
@@ -288,10 +295,13 @@ class TimekpraCard extends HTMLElement {
               <ha-icon icon="${isOnline ? "mdi:desktop-classic" : "mdi:desktop-classic-off"}"></ha-icon>
             </div>
             <div class="tkp-header-info">
-              <div class="tkp-header-title">${title} <span style="font-size: 11px; font-weight: 400; color: var(--secondary-text-color);">Timekpr-nExT</span></div>
+              <div class="tkp-header-title">${title}</div>
               <div class="tkp-header-status">
                 ${isOnline ? "En ligne" : "Hors ligne"}
                 ${parseInt(pending) > 0 ? `<span class="tkp-pending-badge">${pending} en attente</span>` : ""}
+              </div>
+              <div style="margin-top: 4px; display: flex; gap: 6px;">
+                <span class="tkp-service-badge">Timekpr-nExT</span>
               </div>
             </div>
           </div>
