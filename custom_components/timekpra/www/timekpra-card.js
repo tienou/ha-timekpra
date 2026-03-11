@@ -288,7 +288,7 @@ class TimekpraCard extends HTMLElement {
               <ha-icon icon="${isOnline ? "mdi:desktop-classic" : "mdi:desktop-classic-off"}"></ha-icon>
             </div>
             <div class="tkp-header-info">
-              <div class="tkp-header-title">${title}</div>
+              <div class="tkp-header-title">${title} <span style="font-size: 11px; font-weight: 400; color: var(--secondary-text-color);">Timekpr-nExT</span></div>
               <div class="tkp-header-status">
                 ${isOnline ? "En ligne" : "Hors ligne"}
                 ${parseInt(pending) > 0 ? `<span class="tkp-pending-badge">${pending} en attente</span>` : ""}
