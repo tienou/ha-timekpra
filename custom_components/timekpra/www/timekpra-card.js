@@ -277,8 +277,11 @@ class TimekpraCard extends HTMLElement {
           }
           .tkp-service-badge {
             font-size: 12px; font-weight: 500;
-            color: var(--secondary-text-color);
+            color: var(--success-color, #4caf50);
             display: flex; align-items: center; gap: 4px;
+          }
+          .tkp-service-badge.offline {
+            color: var(--disabled-color, #bdbdbd);
           }
           .tkp-service-badge::before {
             content: ""; display: inline-block;
