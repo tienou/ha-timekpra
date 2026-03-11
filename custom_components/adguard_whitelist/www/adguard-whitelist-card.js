@@ -170,13 +170,11 @@ class AdGuardWhitelistCard extends HTMLElement {
     const addBtn = this.querySelector("#aw-add-btn");
     const dropdown = this.querySelector("#aw-dropdown");
 
-    // Stop ALL keyboard/focus events from bubbling to HA's global handlers
+    // Stop keyboard events from bubbling to HA's global shortcuts
     const stop = (e) => e.stopPropagation();
     input.addEventListener("keydown", stop);
     input.addEventListener("keyup", stop);
     input.addEventListener("keypress", stop);
-    input.addEventListener("focusin", stop);
-    input.addEventListener("focusout", stop);
 
     input.addEventListener("input", () => {
       this._newDomain = input.value;
@@ -208,6 +206,10 @@ class AdGuardWhitelistCard extends HTMLElement {
       }
     });
 
+    addBtn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
     addBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       this._addSite();
