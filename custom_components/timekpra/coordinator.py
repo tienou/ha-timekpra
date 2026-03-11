@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import asyncssh
@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN, SCAN_INTERVAL_SECONDS
+from .const import DOMAIN, SCAN_INTERVAL_SECONDS, DEFAULT_NOTIFICATION_THRESHOLD
 from .ssh import TimekpraSSH
 
 _LOGGER = logging.getLogger(__name__)
@@ -172,6 +172,14 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception:
                 pass
 
+        # 5. Calculate time remaining today
+        data["time_remaining"] = self._calc_time_remaining(data)
+
+        # 6. Notification threshold from saved_values
+        data["notification_threshold"] = self.saved_values.get(
+            "notification_threshold", DEFAULT_NOTIFICATION_THRESHOLD
+        )
+
         return data
 
     # ── Parsers ────────────────────────────────────────────────────
@@ -190,7 +198,25 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "lockout_type": "lock",
             "online": False,
             "pending_count": 0,
+            "time_remaining": None,
+            "notification_threshold": DEFAULT_NOTIFICATION_THRESHOLD,
         }
+
+    @staticmethod
+    def _calc_time_remaining(data: dict[str, Any]) -> int | None:
+        """Calculate seconds remaining today (daily limit - time spent)."""
+        time_spent = data.get("time_spent_today")
+        if time_spent is None:
+            return None
+        daily_limits = data.get("daily_limits", [])
+        # Monday=0 in Python, day index in DAYS is 0-based
+        day_index = datetime.now().weekday()
+        if day_index >= len(daily_limits):
+            return None
+        limit_minutes = daily_limits[day_index]
+        limit_seconds = limit_minutes * 60
+        remaining = limit_seconds - time_spent
+        return max(0, remaining)
 
     @staticmethod
     def _process_config(raw: dict[str, str]) -> dict[str, Any]:

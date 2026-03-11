@@ -29,6 +29,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             TimekpraTimeSpentTodaySensor(coordinator, target_user, entry),
+            TimekpraTimeRemainingSensor(coordinator, target_user, entry),
             TimekpraTimeSpentWeekSensor(coordinator, target_user, entry),
             TimekpraOnlineSensor(coordinator, target_user, entry),
             TimekpraPendingSensor(coordinator, target_user, entry),
@@ -58,6 +59,36 @@ class TimekpraTimeSpentTodaySensor(TimekpraEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         attrs: dict[str, Any] = {}
         seconds = self.coordinator.data.get("time_spent_today")
+        if seconds is not None:
+            h, remainder = divmod(seconds, 3600)
+            m = remainder // 60
+            attrs["formatted"] = f"{h}h{m:02d}"
+            attrs["seconds"] = seconds
+        return attrs
+
+
+class TimekpraTimeRemainingSensor(TimekpraEntity, SensorEntity):
+    """Sensor showing time remaining today (minutes)."""
+
+    _attr_icon = "mdi:timer-alert-outline"
+    _attr_native_unit_of_measurement = "min"
+
+    def __init__(self, coordinator, target_user, entry) -> None:
+        super().__init__(coordinator, target_user)
+        self._attr_unique_id = f"{entry.entry_id}_time_remaining"
+        self._attr_name = "Temps restant aujourd'hui"
+
+    @property
+    def native_value(self) -> int | None:
+        seconds = self.coordinator.data.get("time_remaining")
+        if seconds is not None:
+            return seconds // 60
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs: dict[str, Any] = {}
+        seconds = self.coordinator.data.get("time_remaining")
         if seconds is not None:
             h, remainder = divmod(seconds, 3600)
             m = remainder // 60

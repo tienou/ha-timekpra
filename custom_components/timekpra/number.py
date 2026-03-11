@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DAYS, DOMAIN
+from .const import DAYS, DEFAULT_NOTIFICATION_THRESHOLD, DOMAIN
 from .coordinator import TimekpraCoordinator
 from .entity import TimekpraEntity
 from .ssh import TimekpraSSH
@@ -42,6 +42,9 @@ async def async_setup_entry(
     # Allowed-hours range
     entities.append(TimekpraHourStart(coordinator, ssh, target_user, entry))
     entities.append(TimekpraHourEnd(coordinator, ssh, target_user, entry))
+
+    # Notification threshold
+    entities.append(TimekpraNotificationThreshold(coordinator, target_user, entry))
 
     async_add_entities(entities)
 
@@ -206,3 +209,34 @@ class TimekpraHourEnd(TimekpraEntity, NumberEntity):
         await self.coordinator.async_apply(
             "set_allowed_hours", hour_start, int(value)
         )
+
+
+# ── Notification threshold ────────────────────────────────────────
+
+
+class TimekpraNotificationThreshold(TimekpraEntity, NumberEntity):
+    """Box for notification threshold before lock (in minutes, stored locally)."""
+
+    _attr_native_min_value = 0
+    _attr_native_max_value = 60
+    _attr_native_step = 5
+    _attr_mode = NumberMode.BOX
+    _attr_native_unit_of_measurement = "min"
+    _attr_icon = "mdi:bell-ring-outline"
+
+    def __init__(self, coordinator, target_user, entry) -> None:
+        super().__init__(coordinator, target_user)
+        self._attr_unique_id = f"{entry.entry_id}_notification_threshold"
+        self._attr_name = "Notification avant verrouillage"
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.data.get(
+            "notification_threshold", DEFAULT_NOTIFICATION_THRESHOLD
+        )
+
+    async def async_set_native_value(self, value: float) -> None:
+        self.coordinator.data["notification_threshold"] = int(value)
+        self.coordinator.saved_values["notification_threshold"] = int(value)
+        self.async_write_ha_state()
+        await self.coordinator.async_save_state()

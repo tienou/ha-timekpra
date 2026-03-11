@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.1.0";
+const CARD_VERSION = "1.2.0";
 
 class TimekpraCard extends HTMLElement {
   static get properties() {
@@ -120,6 +120,10 @@ class TimekpraCard extends HTMLElement {
     const lockoutType = this._stateValue(this._entity("select", "action_fin_de_temps"));
     const trackInactive = this._stateValue(this._entity("switch", "compter_le_temps_inactif")) === "on";
 
+    const timeRemaining = this._stateValue(this._entity("sensor", "temps_restant_aujourd_hui"));
+    const notifThresholdEid = this._entity("number", "notification_avant_verrouillage");
+    const notifThreshold = this._stateValue(notifThresholdEid);
+
     const user = this.config.target_user;
     const title = this.config.title || `Contrôle Parental - ${user.charAt(0).toUpperCase() + user.slice(1)}`;
 
@@ -195,7 +199,7 @@ class TimekpraCard extends HTMLElement {
             display: flex; align-items: center; gap: 6px;
           }
           .tkp-stats {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
             margin-bottom: 16px;
           }
           .tkp-stat {
@@ -302,6 +306,10 @@ class TimekpraCard extends HTMLElement {
               <div class="tkp-stat-value">${formatTime(timeWeek)}</div>
               <div class="tkp-stat-label">Cette semaine</div>
             </div>
+            <div class="tkp-stat" data-more-info="${this._entity("sensor", "temps_restant_aujourd_hui")}">
+              <div class="tkp-stat-value" style="${timeRemaining !== "indisponible" && parseInt(timeRemaining) <= parseInt(notifThreshold || 15) ? "color: var(--error-color, #f44336)" : ""}">${formatTime(timeRemaining)}</div>
+              <div class="tkp-stat-label">Restant</div>
+            </div>
           </div>
 
           <!-- Days -->
@@ -382,6 +390,14 @@ class TimekpraCard extends HTMLElement {
             <div class="tkp-toggle" data-toggle="${this._entity("switch", "compter_le_temps_inactif")}">
               <span class="tkp-toggle-label">Compter le temps inactif</span>
               <div class="tkp-toggle-switch ${trackInactive ? "on" : "off"}"></div>
+            </div>
+            <div class="tkp-row">
+              <span class="tkp-row-label">Alerte avant fin</span>
+              <div class="tkp-row-controls">
+                <button class="tkp-btn" data-adjust="${notifThresholdEid}" data-delta="-5">-</button>
+                <span class="tkp-row-value" data-more-info="${notifThresholdEid}">${notifThreshold !== "indisponible" ? (parseInt(notifThreshold) === 0 ? "Off" : notifThreshold + " min") : "-"}</span>
+                <button class="tkp-btn" data-adjust="${notifThresholdEid}" data-delta="5">+</button>
+              </div>
             </div>
           </div>
         </div>
