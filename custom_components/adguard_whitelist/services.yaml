@@ -21,3 +21,15 @@ remove_site:
       example: "lumni.fr"
       selector:
         text:
+
+add_bookmark:
+  name: "Ajouter un raccourci Firefox"
+  description: "Crée un raccourci Firefox pour un site déjà autorisé."
+  fields:
+    domain:
+      name: "Domaine"
+      description: "Le nom de domaine (ex: lumni.fr)"
+      required: true
+      example: "lumni.fr"
+      selector:
+        text:

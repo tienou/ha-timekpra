@@ -196,6 +196,17 @@ class AdGuardWhitelistCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self._save_meta()
         await self.async_request_refresh()
 
+    async def async_add_bookmark(self, domain: str) -> None:
+        """Add a Firefox bookmark for an already whitelisted domain."""
+        if not self.ssh_client:
+            return
+        await self._queue_ssh("add", domain)
+        meta = self._domain_meta.get(domain, {})
+        meta["has_bookmark"] = True
+        self._domain_meta[domain] = meta
+        await self._save_meta()
+        await self.async_request_refresh()
+
     async def async_remove_domain(self, domain: str) -> None:
         """Remove a whitelisted domain from AdGuard and optionally Firefox."""
         from .rules import remove_domain_from_rules

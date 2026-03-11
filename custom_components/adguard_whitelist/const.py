@@ -20,6 +20,7 @@ SCAN_INTERVAL_SECONDS = 120
 
 SERVICE_ADD_SITE = "add_site"
 SERVICE_REMOVE_SITE = "remove_site"
+SERVICE_ADD_BOOKMARK = "add_bookmark"
 
 EDUCATIONAL_SITES: dict[str, str] = {
     "lumni.fr": "Éducation",

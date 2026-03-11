@@ -25,6 +25,7 @@ from .const import (
     CONF_SSH_PORT,
     CONF_SSH_USER,
     DOMAIN,
+    SERVICE_ADD_BOOKMARK,
     SERVICE_ADD_SITE,
     SERVICE_REMOVE_SITE,
 )
@@ -143,6 +144,14 @@ def _register_services(hass: HomeAssistant) -> None:
             coordinator: AdGuardWhitelistCoordinator = entry_data["coordinator"]
             await coordinator.async_remove_domain(domain_name)
 
+    async def handle_add_bookmark(call: ServiceCall) -> None:
+        domain_name = call.data["domain"].lower().strip()
+        for entry_data in hass.data[DOMAIN].values():
+            if not isinstance(entry_data, dict):
+                continue
+            coordinator: AdGuardWhitelistCoordinator = entry_data["coordinator"]
+            await coordinator.async_add_bookmark(domain_name)
+
     if not hass.services.has_service(DOMAIN, SERVICE_ADD_SITE):
         hass.services.async_register(
             DOMAIN,
@@ -158,5 +167,11 @@ def _register_services(hass: HomeAssistant) -> None:
             DOMAIN,
             SERVICE_REMOVE_SITE,
             handle_remove_site,
+            schema=vol.Schema({vol.Required("domain"): str}),
+        )
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_ADD_BOOKMARK,
+            handle_add_bookmark,
             schema=vol.Schema({vol.Required("domain"): str}),
         )

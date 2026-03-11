@@ -1,4 +1,4 @@
-const CARD_VERSION = "2.2.0";
+const CARD_VERSION = "2.3.0";
 
 /* ── Autocomplete suggestions ────────────────────────────── */
 const DOMAIN_SUGGESTIONS = [
@@ -239,6 +239,12 @@ class AdGuardWhitelistCard extends HTMLElement {
             display: flex; align-items: center; gap: 4px;
           }
           .aw-ff-icon { color: #ff6611; --mdc-icon-size: 16px; }
+          .aw-ff-add {
+            color: var(--disabled-text-color, #bbb); --mdc-icon-size: 16px;
+            cursor: pointer; opacity: 0.4; transition: opacity 0.15s;
+          }
+          .aw-site-item:hover .aw-ff-add { opacity: 0.8; }
+          .aw-ff-add:hover { color: #ff6611 !important; opacity: 1 !important; }
           .aw-site-remove {
             cursor: pointer; color: var(--error-color, #f44336);
             opacity: 0.4; transition: opacity 0.15s; display: flex; align-items: center;
@@ -655,10 +661,14 @@ class AdGuardWhitelistCard extends HTMLElement {
 
       for (const d of catDomains) {
         const hasBm = bookmarked.has(d);
+        let ffHtml = "";
+        if (hasBm) {
+          ffHtml = '<ha-icon icon="mdi:firefox" class="aw-ff-icon"></ha-icon>';
+        } else if (sshEnabled) {
+          ffHtml = `<ha-icon icon="mdi:firefox" class="aw-ff-add" data-bookmark="${d}" title="Créer un raccourci Firefox"></ha-icon>`;
+        }
         html += `<div class="aw-site-item">
-          <span class="aw-site-name">
-            ${hasBm ? '<ha-icon icon="mdi:firefox" class="aw-ff-icon"></ha-icon>' : ""}${d}
-          </span>
+          <span class="aw-site-name">${ffHtml}${d}</span>
           <div class="aw-site-remove" data-remove="${d}" title="Supprimer">
             <ha-icon icon="mdi:close-circle-outline" style="--mdc-icon-size:18px"></ha-icon>
           </div>
@@ -684,11 +694,25 @@ class AdGuardWhitelistCard extends HTMLElement {
         }
       });
     });
+
+    // Bind bookmark buttons
+    container.querySelectorAll("[data-bookmark]").forEach((el) => {
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const domain = el.dataset.bookmark;
+        this._addBookmark(domain);
+      });
+    });
   }
 
   _removeSite(domain) {
     if (!this._hass) return;
     this._hass.callService("adguard_whitelist", "remove_site", { domain });
+  }
+
+  _addBookmark(domain) {
+    if (!this._hass) return;
+    this._hass.callService("adguard_whitelist", "add_bookmark", { domain });
   }
 
   getCardSize() {
