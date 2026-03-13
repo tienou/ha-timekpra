@@ -27,8 +27,6 @@ PLATFORMS = [Platform.NUMBER, Platform.SWITCH, Platform.SELECT, Platform.SENSOR]
 
 CARD_JS = "timekpra-card.js"
 
-_CARD_REGISTERED = False
-
 
 def _get_version() -> str:
     """Read version from manifest.json for cache-busting."""
@@ -43,28 +41,24 @@ def _get_version() -> str:
 
 async def _deploy_card(hass: HomeAssistant) -> None:
     """Copy the JS card to www/ and register it as a Lovelace resource."""
-    global _CARD_REGISTERED
-    if _CARD_REGISTERED:
-        return
-
-    # 1. Copy JS to www/
     src = Path(__file__).parent / "www" / CARD_JS
     dst_dir = Path(hass.config.path("www"))
     dst_dir.mkdir(exist_ok=True)
     dst = dst_dir / CARD_JS
+
+    # Always copy — ensures updates are deployed after HACS upgrade
     try:
         await hass.async_add_executor_job(shutil.copy2, str(src), str(dst))
-        _LOGGER.debug("Timekpra card copied to %s", dst)
+        version = _get_version()
+        _LOGGER.info("Timekpra card v%s deployed to %s", version, dst)
     except Exception:
-        _LOGGER.warning("Could not copy card JS to %s", dst)
+        _LOGGER.warning("Could not copy card JS from %s to %s", src, dst)
         return
 
-    # 2. Load JS on every page with cache-busting
+    # Register JS with cache-busting version
     version = _get_version()
     card_url = f"/local/{CARD_JS}?v={version}"
     add_extra_js_url(hass, card_url)
-
-    _CARD_REGISTERED = True
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
