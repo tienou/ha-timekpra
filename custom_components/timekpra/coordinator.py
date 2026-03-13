@@ -113,10 +113,15 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except (OSError, asyncssh.Error):
             _LOGGER.info("Machine offline - queuing %s for later", method)
             self._pending[method] = full_args
+            # Persist current in-memory data so changes survive HA restart
+            if self.data:
+                self._last_known_data = dict(self.data)
             await self._save_state()
         except Exception:
             _LOGGER.exception("Unexpected error running %s", method)
             self._pending[method] = full_args
+            if self.data:
+                self._last_known_data = dict(self.data)
             await self._save_state()
 
     async def _flush_pending(self) -> None:
