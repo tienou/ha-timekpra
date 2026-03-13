@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.3.0";
+const CARD_VERSION = "1.3.1";
 
 class TimekpraCard extends HTMLElement {
   static get properties() {
@@ -526,17 +526,24 @@ class TimekpraCardEditor extends HTMLElement {
   }
 }
 
-customElements.define("timekpra-card", TimekpraCard);
-customElements.define("timekpra-card-editor", TimekpraCardEditor);
+/* Guard against double-load on Android WebView */
+if (!customElements.get("timekpra-card")) {
+  customElements.define("timekpra-card", TimekpraCard);
+}
+if (!customElements.get("timekpra-card-editor")) {
+  customElements.define("timekpra-card-editor", TimekpraCardEditor);
+}
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "timekpra-card",
-  name: "Timekpra - Contrôle Parental",
-  description: "Carte de gestion du contrôle parental Timekpr-nExT",
-  preview: true,
-  documentationURL: "https://github.com/tienou/ha-timekpra",
-});
+if (!window.customCards.some((c) => c.type === "timekpra-card")) {
+  window.customCards.push({
+    type: "timekpra-card",
+    name: "Timekpra - Contrôle Parental",
+    description: "Carte de gestion du contrôle parental Timekpr-nExT",
+    preview: true,
+    documentationURL: "https://github.com/tienou/ha-timekpra",
+  });
+}
 
 console.info(
   `%c TIMEKPRA-CARD %c v${CARD_VERSION} `,

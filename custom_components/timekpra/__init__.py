@@ -26,11 +26,27 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.NUMBER, Platform.SWITCH, Platform.SELECT, Platform.SENSOR]
 
 CARD_JS = "timekpra-card.js"
-LOCAL_CARD_URL = f"/local/{CARD_JS}"
+
+_CARD_REGISTERED = False
+
+
+def _get_version() -> str:
+    """Read version from manifest.json for cache-busting."""
+    import json
+
+    manifest = Path(__file__).parent / "manifest.json"
+    try:
+        return json.loads(manifest.read_text()).get("version", "0")
+    except Exception:
+        return "0"
 
 
 async def _deploy_card(hass: HomeAssistant) -> None:
     """Copy the JS card to www/ and register it as a Lovelace resource."""
+    global _CARD_REGISTERED
+    if _CARD_REGISTERED:
+        return
+
     # 1. Copy JS to www/
     src = Path(__file__).parent / "www" / CARD_JS
     dst_dir = Path(hass.config.path("www"))
@@ -43,28 +59,12 @@ async def _deploy_card(hass: HomeAssistant) -> None:
         _LOGGER.warning("Could not copy card JS to %s", dst)
         return
 
-    # 2. Load JS on every page
-    add_extra_js_url(hass, LOCAL_CARD_URL)
+    # 2. Load JS on every page with cache-busting
+    version = _get_version()
+    card_url = f"/local/{CARD_JS}?v={version}"
+    add_extra_js_url(hass, card_url)
 
-    # 3. Register as Lovelace resource (so it shows in card picker)
-    try:
-        resources = hass.data.get("lovelace", {}).get("resources")
-        if resources is not None:
-            existing = [
-                r for r in resources.async_items()
-                if LOCAL_CARD_URL in r.get("url", "")
-            ]
-            if not existing:
-                await resources.async_create_item(
-                    {"res_type": "module", "url": LOCAL_CARD_URL}
-                )
-                _LOGGER.info("Registered Timekpra card as Lovelace resource")
-            else:
-                _LOGGER.debug("Timekpra card resource already registered")
-        else:
-            _LOGGER.debug("Lovelace resources not available")
-    except Exception:
-        _LOGGER.debug("Could not auto-register Lovelace resource", exc_info=True)
+    _CARD_REGISTERED = True
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
