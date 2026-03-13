@@ -164,13 +164,44 @@ class TimekpraSSH:
         )
 
     async def set_allowed_hours(
-        self, user: str, hour_start: int, hour_end: int
+        self,
+        user: str,
+        hour_start: int,
+        hour_end: int,
+        minute_start: int = 0,
+        minute_end: int = 59,
     ) -> None:
-        """Set allowed login hours (same for all days)."""
+        """Set allowed login hours with optional minute precision.
+
+        Uses timekpra bracket syntax: ``hour[mm_start-mm_end]``.
+        Example: ``7[30-59];8;9;...;20[00-45]`` for 7:30→20:45.
+        """
         safe_user = _sanitize(user)
-        hours = ";".join(str(h) for h in range(hour_start, hour_end + 1))
+
+        # When minute_end is 0, the user means "up to hour_end:00",
+        # i.e. the last full allowed hour is hour_end - 1.
+        if minute_end == 0 and hour_end > hour_start:
+            hour_end -= 1
+            minute_end = 59
+
+        parts: list[str] = []
+        for h in range(hour_start, hour_end + 1):
+            if h == hour_start == hour_end:
+                # Single-hour range
+                if minute_start > 0 or minute_end < 59:
+                    parts.append(f"{h}[{minute_start:02d}-{minute_end:02d}]")
+                else:
+                    parts.append(str(h))
+            elif h == hour_start and minute_start > 0:
+                parts.append(f"{h}[{minute_start:02d}-59]")
+            elif h == hour_end and minute_end < 59:
+                parts.append(f"{h}[00-{minute_end:02d}]")
+            else:
+                parts.append(str(h))
+
+        hours_str = ";".join(parts)
         await self.execute(
-            self._sudo(f"timekpra --setallowedhours '{safe_user}' 'ALL' '{hours}'")
+            self._sudo(f"timekpra --setallowedhours '{safe_user}' 'ALL' '{hours_str}'")
         )
 
     async def set_time_limits(self, user: str, limits_minutes: list[int]) -> None:

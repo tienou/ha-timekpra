@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.3.1";
+const CARD_VERSION = "1.4.0";
 
 class TimekpraCard extends HTMLElement {
   static get properties() {
@@ -110,9 +110,13 @@ class TimekpraCard extends HTMLElement {
     const isOnline = online === "En ligne";
 
     const hourStartEid = this._entity("number", "heure_de_debut");
+    const minuteStartEid = this._entity("number", "minute_de_debut");
     const hourEndEid = this._entity("number", "heure_de_fin");
+    const minuteEndEid = this._entity("number", "minute_de_fin");
     const hourStart = this._stateValue(hourStartEid);
+    const minuteStart = this._stateValue(minuteStartEid);
     const hourEnd = this._stateValue(hourEndEid);
+    const minuteEnd = this._stateValue(minuteEndEid);
 
     const dailyLimitActive = this._stateValue(this._entity("switch", "limites_quotidiennes_actives")) === "on";
     const weeklyLimitActive = this._stateValue(this._entity("switch", "limite_hebdomadaire_active")) === "on";
@@ -293,6 +297,23 @@ class TimekpraCard extends HTMLElement {
           .tkp-service-badge.offline::before {
             background: var(--disabled-color, #bdbdbd);
           }
+          .tkp-time-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 0; border-bottom: 1px solid var(--divider-color, rgba(0,0,0,0.06));
+          }
+          .tkp-time-row:last-child { border-bottom: none; }
+          .tkp-time-controls {
+            display: flex; align-items: center; gap: 4px;
+          }
+          .tkp-time-group {
+            display: flex; align-items: center; gap: 4px;
+          }
+          .tkp-time-value {
+            font-size: 16px; font-weight: 600; min-width: 28px; text-align: center;
+          }
+          .tkp-time-colon {
+            font-size: 16px; font-weight: 600; padding: 0 2px;
+          }
           .tkp-select {
             background: var(--card-background-color, var(--ha-card-background));
             border: 1px solid var(--divider-color); border-radius: 8px;
@@ -345,20 +366,36 @@ class TimekpraCard extends HTMLElement {
           <!-- Hours -->
           <div class="tkp-section">
             <div class="tkp-section-title"><ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:16px"></ha-icon> Plage horaire</div>
-            <div class="tkp-row">
+            <div class="tkp-time-row">
               <span class="tkp-row-label">Début</span>
-              <div class="tkp-row-controls">
-                <button class="tkp-btn" data-adjust="${hourStartEid}" data-delta="-1">-</button>
-                <span class="tkp-row-value">${hourStart !== "indisponible" ? hourStart + "h" : "-"}</span>
-                <button class="tkp-btn" data-adjust="${hourStartEid}" data-delta="1">+</button>
+              <div class="tkp-time-controls">
+                <div class="tkp-time-group">
+                  <button class="tkp-btn" data-adjust="${hourStartEid}" data-delta="-1">-</button>
+                  <span class="tkp-time-value">${hourStart !== "indisponible" ? hourStart : "-"}</span>
+                  <button class="tkp-btn" data-adjust="${hourStartEid}" data-delta="1">+</button>
+                </div>
+                <span class="tkp-time-colon">:</span>
+                <div class="tkp-time-group">
+                  <button class="tkp-btn" data-adjust="${minuteStartEid}" data-delta="-5">-</button>
+                  <span class="tkp-time-value">${minuteStart !== "indisponible" ? minuteStart.toString().padStart(2, "0") : "00"}</span>
+                  <button class="tkp-btn" data-adjust="${minuteStartEid}" data-delta="5">+</button>
+                </div>
               </div>
             </div>
-            <div class="tkp-row">
+            <div class="tkp-time-row">
               <span class="tkp-row-label">Fin</span>
-              <div class="tkp-row-controls">
-                <button class="tkp-btn" data-adjust="${hourEndEid}" data-delta="-1">-</button>
-                <span class="tkp-row-value">${hourEnd !== "indisponible" ? hourEnd + "h" : "-"}</span>
-                <button class="tkp-btn" data-adjust="${hourEndEid}" data-delta="1">+</button>
+              <div class="tkp-time-controls">
+                <div class="tkp-time-group">
+                  <button class="tkp-btn" data-adjust="${hourEndEid}" data-delta="-1">-</button>
+                  <span class="tkp-time-value">${hourEnd !== "indisponible" ? hourEnd : "-"}</span>
+                  <button class="tkp-btn" data-adjust="${hourEndEid}" data-delta="1">+</button>
+                </div>
+                <span class="tkp-time-colon">:</span>
+                <div class="tkp-time-group">
+                  <button class="tkp-btn" data-adjust="${minuteEndEid}" data-delta="-5">-</button>
+                  <span class="tkp-time-value">${minuteEnd !== "indisponible" ? minuteEnd.toString().padStart(2, "0") : "59"}</span>
+                  <button class="tkp-btn" data-adjust="${minuteEndEid}" data-delta="5">+</button>
+                </div>
               </div>
             </div>
           </div>

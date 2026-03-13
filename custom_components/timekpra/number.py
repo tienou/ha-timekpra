@@ -39,9 +39,11 @@ async def async_setup_entry(
     entities.append(TimekpraWeeklyLimit(coordinator, ssh, target_user, entry))
     entities.append(TimekpraMonthlyLimit(coordinator, ssh, target_user, entry))
 
-    # Allowed-hours range
+    # Allowed-hours range (hours + minutes)
     entities.append(TimekpraHourStart(coordinator, ssh, target_user, entry))
+    entities.append(TimekpraMinuteStart(coordinator, ssh, target_user, entry))
     entities.append(TimekpraHourEnd(coordinator, ssh, target_user, entry))
+    entities.append(TimekpraMinuteEnd(coordinator, ssh, target_user, entry))
 
     # Notification threshold
     entities.append(TimekpraNotificationThreshold(coordinator, target_user, entry))
@@ -175,10 +177,43 @@ class TimekpraHourStart(TimekpraEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         hour_end = self.coordinator.data.get("hour_end", 23)
+        minute_start = self.coordinator.data.get("minute_start", 0)
+        minute_end = self.coordinator.data.get("minute_end", 59)
         self.coordinator.data["hour_start"] = int(value)
         self.async_write_ha_state()
         await self.coordinator.async_apply(
-            "set_allowed_hours", int(value), hour_end
+            "set_allowed_hours", int(value), hour_end, minute_start, minute_end
+        )
+
+
+class TimekpraMinuteStart(TimekpraEntity, NumberEntity):
+    """Box for the start minute of the first allowed hour."""
+
+    _attr_native_min_value = 0
+    _attr_native_max_value = 55
+    _attr_native_step = 5
+    _attr_mode = NumberMode.BOX
+    _attr_native_unit_of_measurement = "min"
+    _attr_icon = "mdi:clock-start"
+
+    def __init__(self, coordinator, ssh, target_user, entry) -> None:
+        super().__init__(coordinator, target_user)
+        self._ssh = ssh
+        self._attr_unique_id = f"{entry.entry_id}_minute_start"
+        self._attr_name = "Minute de d\u00e9but"
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.data.get("minute_start", 0)
+
+    async def async_set_native_value(self, value: float) -> None:
+        hour_start = self.coordinator.data.get("hour_start", 0)
+        hour_end = self.coordinator.data.get("hour_end", 23)
+        minute_end = self.coordinator.data.get("minute_end", 59)
+        self.coordinator.data["minute_start"] = int(value)
+        self.async_write_ha_state()
+        await self.coordinator.async_apply(
+            "set_allowed_hours", hour_start, hour_end, int(value), minute_end
         )
 
 
@@ -204,10 +239,43 @@ class TimekpraHourEnd(TimekpraEntity, NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         hour_start = self.coordinator.data.get("hour_start", 0)
+        minute_start = self.coordinator.data.get("minute_start", 0)
+        minute_end = self.coordinator.data.get("minute_end", 59)
         self.coordinator.data["hour_end"] = int(value)
         self.async_write_ha_state()
         await self.coordinator.async_apply(
-            "set_allowed_hours", hour_start, int(value)
+            "set_allowed_hours", hour_start, int(value), minute_start, minute_end
+        )
+
+
+class TimekpraMinuteEnd(TimekpraEntity, NumberEntity):
+    """Box for the end minute of the last allowed hour."""
+
+    _attr_native_min_value = 0
+    _attr_native_max_value = 55
+    _attr_native_step = 5
+    _attr_mode = NumberMode.BOX
+    _attr_native_unit_of_measurement = "min"
+    _attr_icon = "mdi:clock-end"
+
+    def __init__(self, coordinator, ssh, target_user, entry) -> None:
+        super().__init__(coordinator, target_user)
+        self._ssh = ssh
+        self._attr_unique_id = f"{entry.entry_id}_minute_end"
+        self._attr_name = "Minute de fin"
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.data.get("minute_end", 59)
+
+    async def async_set_native_value(self, value: float) -> None:
+        hour_start = self.coordinator.data.get("hour_start", 0)
+        hour_end = self.coordinator.data.get("hour_end", 23)
+        minute_start = self.coordinator.data.get("minute_start", 0)
+        self.coordinator.data["minute_end"] = int(value)
+        self.async_write_ha_state()
+        await self.coordinator.async_apply(
+            "set_allowed_hours", hour_start, hour_end, minute_start, int(value)
         )
 
 

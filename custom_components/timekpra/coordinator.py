@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -17,6 +18,30 @@ from .ssh import TimekpraSSH
 _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 2
+
+_HOUR_RE = re.compile(r"^!?(\d+)(?:\[(\d+)-(\d+)\])?$")
+
+
+def _parse_hour_entries(raw: str) -> list[tuple[int, int, int]]:
+    """Parse timekpra hour string into (hour, minute_start, minute_end) tuples.
+
+    Examples: ``"7[30-59];8;9;20[00-45]"`` →
+    ``[(7,30,59), (8,0,59), (9,0,59), (20,0,45)]``
+    """
+    results: list[tuple[int, int, int]] = []
+    if not raw:
+        return results
+    for entry in raw.split(";"):
+        entry = entry.strip()
+        if not entry:
+            continue
+        m = _HOUR_RE.match(entry)
+        if m:
+            h = int(m.group(1))
+            ms = int(m.group(2)) if m.group(2) is not None else 0
+            me = int(m.group(3)) if m.group(3) is not None else 59
+            results.append((h, ms, me))
+    return results
 
 
 class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -191,6 +216,8 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "allowed_days": [1, 2, 3, 4, 5, 6, 7],
             "hour_start": 0,
             "hour_end": 23,
+            "minute_start": 0,
+            "minute_end": 59,
             "daily_limits": [60] * 7,
             "weekly_limit": 0,
             "monthly_limit": 0,
@@ -227,15 +254,19 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         days = [int(d) for d in days_str.split(";") if d.strip().isdigit()]
         data["allowed_days"] = days if days else [1, 2, 3, 4, 5, 6, 7]
 
-        hours: list[int] = []
+        hours_raw: str = ""
         for key in ("ALLOWED_HOURS_ALL", "ALLOWED_HOURS_1", "ALLOWED_HOURS_MON"):
             if key in raw:
-                hours = [
-                    int(h) for h in raw[key].split(";") if h.strip().isdigit()
-                ]
+                hours_raw = raw[key]
                 break
+
+        hour_entries = _parse_hour_entries(hours_raw)
+        hours = [e[0] for e in hour_entries]
         data["hour_start"] = min(hours) if hours else 0
         data["hour_end"] = max(hours) if hours else 23
+        # Minutes from first and last entry brackets
+        data["minute_start"] = hour_entries[0][1] if hour_entries else 0
+        data["minute_end"] = hour_entries[-1][2] if hour_entries else 59
 
         limits_str = raw.get("LIMITS_PER_WEEKDAYS", "")
         if limits_str:
