@@ -237,6 +237,13 @@ class TimekpraSSH:
             self._sudo(f"timekpra --settrackinactive '{safe_user}' '{val}'")
         )
 
+    async def set_time_left(self, user: str, operator: str, seconds: int) -> None:
+        """Set time left for user: operator is '+', '-', or '='."""
+        safe_user = _sanitize(user)
+        await self.execute(
+            self._sudo(f"timekpra --settimeleft '{safe_user}' '{operator}' '{seconds}'")
+        )
+
     async def set_lockout_type(self, user: str, lockout_type: str) -> None:
         safe_user = _sanitize(user)
         safe_type = _sanitize(lockout_type)

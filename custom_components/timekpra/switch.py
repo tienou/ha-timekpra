@@ -282,6 +282,8 @@ class TimekpraOverrideSwitch(TimekpraEntity, SwitchEntity):
         await self.coordinator.async_apply("set_time_limits", unlimited_daily)
         await self.coordinator.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
         await self.coordinator.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
+        # Force 24h de temps restant pour débloquer immédiatement
+        await self.coordinator.async_apply("set_time_left", "=", 86400)
 
     async def async_turn_off(self, **kwargs) -> None:
         if not self.is_on:
