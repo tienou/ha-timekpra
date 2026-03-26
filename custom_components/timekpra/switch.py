@@ -54,6 +54,9 @@ async def async_setup_entry(
     entities.append(TimekpraWeeklyLimitToggle(coordinator, target_user, entry))
     entities.append(TimekpraMonthlyLimitToggle(coordinator, target_user, entry))
 
+    # Temporary override (bypass ALL restrictions)
+    entities.append(TimekpraOverrideSwitch(coordinator, target_user, entry))
+
     async_add_entities(entities)
 
 
@@ -229,3 +232,106 @@ class TimekpraMonthlyLimitToggle(TimekpraEntity, SwitchEntity):
         self.coordinator.data["monthly_limit"] = restored
         self.async_write_ha_state()
         await self.coordinator.async_apply("set_time_limit_month", restored)
+
+
+# ── Temporary override (bypass ALL restrictions) ───────────────────
+
+
+class TimekpraOverrideSwitch(TimekpraEntity, SwitchEntity):
+    """Temporarily bypass ALL restrictions: hours, daily/weekly/monthly limits.
+
+    ON  = save current config, set hours to 0-23h59, limits to unlimited, time left to 24h.
+    OFF = restore previously saved config.
+    """
+
+    _attr_icon = "mdi:shield-off-outline"
+
+    def __init__(self, coordinator, target_user, entry) -> None:
+        super().__init__(coordinator, target_user)
+        self._attr_unique_id = f"{entry.entry_id}_override"
+        self._attr_name = "Déblocage temporaire"
+
+    @property
+    def is_on(self) -> bool:
+        return self.coordinator.saved_values.get("override_active", False)
+
+    async def async_turn_on(self, **kwargs) -> None:
+        if self.is_on:
+            return
+
+        data = self.coordinator.data
+
+        # Save current config
+        self.coordinator.saved_values["override_hours"] = {
+            "hour_start": data.get("hour_start", 0),
+            "hour_end": data.get("hour_end", 23),
+            "minute_start": data.get("minute_start", 0),
+            "minute_end": data.get("minute_end", 59),
+        }
+        current_daily = data.get("daily_limits", DEFAULT_DAILY_LIMITS)
+        if any(v < UNLIMITED_DAILY for v in current_daily):
+            self.coordinator.saved_values["override_daily"] = list(current_daily)
+        current_weekly = data.get("weekly_limit", DEFAULT_WEEKLY_LIMIT)
+        if current_weekly < UNLIMITED_WEEKLY:
+            self.coordinator.saved_values["override_weekly"] = current_weekly
+        current_monthly = data.get("monthly_limit", DEFAULT_MONTHLY_LIMIT)
+        if current_monthly < UNLIMITED_MONTHLY:
+            self.coordinator.saved_values["override_monthly"] = current_monthly
+
+        self.coordinator.saved_values["override_active"] = True
+        await self.coordinator.async_save_state()
+
+        # Set everything to unlimited
+        data["hour_start"] = 0
+        data["hour_end"] = 23
+        data["minute_start"] = 0
+        data["minute_end"] = 59
+        data["daily_limits"] = [UNLIMITED_DAILY] * 7
+        data["weekly_limit"] = UNLIMITED_WEEKLY
+        data["monthly_limit"] = UNLIMITED_MONTHLY
+        self.async_write_ha_state()
+
+        await self.coordinator.async_apply("set_allowed_hours", 0, 23, 0, 59)
+        await self.coordinator.async_apply("set_time_limits", [UNLIMITED_DAILY] * 7)
+        await self.coordinator.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
+        await self.coordinator.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
+        await self.coordinator.async_apply("set_time_left", "=", 86400)
+
+    async def async_turn_off(self, **kwargs) -> None:
+        if not self.is_on:
+            return
+
+        # Restore saved config
+        hours = self.coordinator.saved_values.pop("override_hours", {})
+        h_start = hours.get("hour_start", 0)
+        h_end = hours.get("hour_end", 23)
+        m_start = hours.get("minute_start", 0)
+        m_end = hours.get("minute_end", 59)
+
+        restored_daily = self.coordinator.saved_values.pop(
+            "override_daily", DEFAULT_DAILY_LIMITS
+        )
+        restored_weekly = self.coordinator.saved_values.pop(
+            "override_weekly", DEFAULT_WEEKLY_LIMIT
+        )
+        restored_monthly = self.coordinator.saved_values.pop(
+            "override_monthly", DEFAULT_MONTHLY_LIMIT
+        )
+
+        self.coordinator.saved_values["override_active"] = False
+        await self.coordinator.async_save_state()
+
+        data = self.coordinator.data
+        data["hour_start"] = h_start
+        data["hour_end"] = h_end
+        data["minute_start"] = m_start
+        data["minute_end"] = m_end
+        data["daily_limits"] = list(restored_daily)
+        data["weekly_limit"] = restored_weekly
+        data["monthly_limit"] = restored_monthly
+        self.async_write_ha_state()
+
+        await self.coordinator.async_apply("set_allowed_hours", h_start, h_end, m_start, m_end)
+        await self.coordinator.async_apply("set_time_limits", list(restored_daily))
+        await self.coordinator.async_apply("set_time_limit_week", restored_weekly)
+        await self.coordinator.async_apply("set_time_limit_month", restored_monthly)
