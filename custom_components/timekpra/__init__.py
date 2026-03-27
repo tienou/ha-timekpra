@@ -5,7 +5,6 @@ import logging
 import shutil
 from pathlib import Path
 
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
@@ -53,12 +52,6 @@ async def _deploy_card(hass: HomeAssistant) -> None:
         _LOGGER.info("Timekpra card v%s deployed to %s", version, dst)
     except Exception:
         _LOGGER.warning("Could not copy card JS from %s to %s", src, dst)
-        return
-
-    # Register JS with cache-busting version
-    version = _get_version()
-    card_url = f"/local/{CARD_JS}?v={version}"
-    add_extra_js_url(hass, card_url)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
