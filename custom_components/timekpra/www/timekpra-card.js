@@ -691,7 +691,9 @@ class TimekpraCard extends HTMLElement {
       deleteBtn.addEventListener("mousedown", (e) => {
         e.stopPropagation();
         e.preventDefault();
-        this._deleteProfile(activeProfile);
+        if (confirm(`Supprimer le profil « ${activeProfile} » ?`)) {
+          this._deleteProfile(activeProfile);
+        }
       });
     }
   }
