@@ -438,11 +438,17 @@ class TimekpraCard extends HTMLElement {
               <button class="tkp-icon-btn danger" id="tkp-profile-delete" title="Supprimer ce profil">
                 <ha-icon icon="mdi:delete" style="--mdc-icon-size:16px"></ha-icon>
               </button>` : ""}
-            </div>
-            ${canSave ? `<div class="tkp-profile-actions">
-              <input type="text" id="tkp-profile-name" placeholder="Nouveau profil...">
-              <button class="tkp-icon-btn" id="tkp-profile-save" title="Créer un nouveau profil">
+              ${canSave ? `<button class="tkp-icon-btn" id="tkp-profile-add-toggle" title="Créer un nouveau profil">
                 <ha-icon icon="mdi:plus" style="--mdc-icon-size:16px"></ha-icon>
+              </button>` : ""}
+            </div>
+            ${canSave ? `<div class="tkp-profile-actions" id="tkp-profile-new-row" style="display:${this._showNewProfile ? "flex" : "none"}">
+              <input type="text" id="tkp-profile-name" placeholder="Nom du nouveau profil...">
+              <button class="tkp-icon-btn" id="tkp-profile-save" title="Créer">
+                <ha-icon icon="mdi:check" style="--mdc-icon-size:16px"></ha-icon>
+              </button>
+              <button class="tkp-icon-btn" id="tkp-profile-add-cancel" title="Annuler">
+                <ha-icon icon="mdi:close" style="--mdc-icon-size:16px"></ha-icon>
               </button>
             </div>` : ""}
           </div>
@@ -624,6 +630,34 @@ class TimekpraCard extends HTMLElement {
       }
     }
 
+    // Toggle "new profile" row
+    const addToggleBtn = this.shadowRoot.querySelector("#tkp-profile-add-toggle");
+    const newRow = this.shadowRoot.querySelector("#tkp-profile-new-row");
+    if (addToggleBtn && newRow) {
+      addToggleBtn.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this._showNewProfile = true;
+        newRow.style.display = "flex";
+        setTimeout(() => {
+          const input = this.shadowRoot.querySelector("#tkp-profile-name");
+          if (input) input.focus();
+        }, 50);
+      });
+    }
+
+    // Cancel new profile
+    const cancelBtn = this.shadowRoot.querySelector("#tkp-profile-add-cancel");
+    if (cancelBtn && newRow) {
+      cancelBtn.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this._showNewProfile = false;
+        this._profileInputValue = "";
+        newRow.style.display = "none";
+      });
+    }
+
     // Bind profile save (use mousedown to fire BEFORE blur resets the input)
     const saveBtn = this.shadowRoot.querySelector("#tkp-profile-save");
     if (saveBtn) {
@@ -634,7 +668,9 @@ class TimekpraCard extends HTMLElement {
         if (name.trim()) {
           this._saveProfile(name.trim());
           this._profileInputValue = "";
+          this._showNewProfile = false;
           if (profileInput) profileInput.value = "";
+          if (newRow) newRow.style.display = "none";
         }
       });
     }
