@@ -16,6 +16,17 @@ class TimekpraCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    // Intercept events in CAPTURE phase on the host element so HA
+    // cannot steal focus from inputs and selects inside the card
+    const stop = (e) => {
+      const path = e.composedPath();
+      if (path.some((el) => el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA")) {
+        e.stopPropagation();
+      }
+    };
+    for (const evt of ["pointerdown", "mousedown", "touchstart", "keydown", "keyup", "keypress", "click", "focusin"]) {
+      this.addEventListener(evt, stop, true);
+    }
   }
 
   setConfig(config) {
