@@ -571,7 +571,19 @@ class TimekpraCard extends HTMLElement {
         e.stopPropagation();
         this._setSelect(el.dataset.select, e.target.value);
       });
+      // Prevent HA from intercepting events on selects
+      for (const evt of ["keydown", "keyup", "keypress", "pointerdown", "mousedown", "touchstart", "click"]) {
+        el.addEventListener(evt, (e) => e.stopPropagation());
+      }
     });
+
+    // Prevent HA from capturing keyboard events inside the profile input
+    const profileInput = this.shadowRoot.querySelector("#tkp-profile-name");
+    if (profileInput) {
+      for (const evt of ["keydown", "keyup", "keypress", "pointerdown", "mousedown", "touchstart", "click", "focus"]) {
+        profileInput.addEventListener(evt, (e) => e.stopPropagation());
+      }
+    }
 
     // Bind profile save
     const saveBtn = this.shadowRoot.querySelector("#tkp-profile-save");
