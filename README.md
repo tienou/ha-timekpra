@@ -10,6 +10,9 @@ Contrôlez le temps d'écran de vos enfants directement depuis votre dashboard H
 
 ## Fonctionnalités
 
+- **Profils prédéfinis** : basculez en un clic entre des configurations complètes (École, Vacances, Chez Papi Mamie...) — changement instantané dans l'interface
+- **Profils personnalisés** : créez, modifiez et supprimez vos propres profils depuis la carte Lovelace
+- **Déblocage temporaire** : profil intégré pour bypasser toutes les restrictions d'un clic
 - **Limites quotidiennes** : réglables par jour (Lun-Dim), avec boutons +/- directement dans la carte
 - **Limite hebdomadaire / mensuelle** : en heures, avec affichage "Illimité" quand désactivé
 - **Plage horaire** : heure de début et fin d'accès autorisé
@@ -72,6 +75,8 @@ La carte est installée automatiquement. Pour l'ajouter à un dashboard :
 
 ### Fonctionnalités de la carte
 
+- **Sélecteur de profil** : menu déroulant pour basculer instantanément entre les profils
+- **Gestion des profils** : boutons pour créer, modifier et supprimer des profils personnalisés
 - **Limites quotidiennes** : boutons ±15 min par jour, affiche "Illimité" à 1440 min
 - **Limite hebdomadaire** : boutons ±1h, affiche "Illimité" à 168h
 - **Limite mensuelle** : boutons ±1h, affiche "Illimité" à 744h
@@ -85,8 +90,8 @@ La carte est installée automatiquement. Pour l'ajouter à un dashboard :
 | Type | Entités |
 |------|---------|
 | **Number** | Limite Lundi…Dimanche, Limite hebdo, Limite mensuelle, Heure début/fin |
-| **Switch** | Jour autorisé Lundi…Dimanche, Compter le temps inactif, Limite hebdo on/off, Limite mensuelle on/off |
-| **Select** | Action fin de temps (lock/suspend/shutdown) |
+| **Switch** | Jour autorisé Lundi…Dimanche, Compter le temps inactif, Limites quotidiennes on/off, Limite hebdo on/off, Limite mensuelle on/off, Déblocage temporaire |
+| **Select** | Action fin de temps (lock/suspend/shutdown), Profil actif |
 | **Sensor** | Temps utilisé aujourd'hui, Temps utilisé cette semaine, Ordinateur (en ligne/hors ligne), Modifications en attente |
 
 ## Fonctionnement technique
