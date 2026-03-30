@@ -180,9 +180,10 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def profiles(self) -> dict[str, dict[str, Any]]:
-        """Return merged default + user profiles."""
+        """Return merged default + user profiles, minus deleted defaults."""
+        deleted = set(self.saved_values.get("deleted_profiles", []))
         user_profiles = self.saved_values.get("profiles", {})
-        merged = dict(DEFAULT_PROFILES)
+        merged = {k: v for k, v in DEFAULT_PROFILES.items() if k not in deleted}
         merged.update(user_profiles)
         return merged
 
@@ -210,18 +211,26 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         user_profiles = self.saved_values.setdefault("profiles", {})
         user_profiles[name] = snapshot
         self.saved_values["active_profile"] = name
+        # Re-enable if it was previously deleted
+        deleted = self.saved_values.get("deleted_profiles", [])
+        if name in deleted:
+            deleted.remove(name)
         await self._save_state()
         self.async_update_listeners()
         _LOGGER.info("Saved profile: %s", name)
 
     async def async_delete_profile(self, name: str) -> None:
-        """Delete a user-created profile (cannot delete defaults or override)."""
-        if name == PROFILE_OVERRIDE:
+        """Delete a profile (cannot delete override or Personnalisé)."""
+        if name in (PROFILE_OVERRIDE, PROFILE_CUSTOM):
             _LOGGER.warning("Cannot delete built-in profile: %s", name)
             return
         user_profiles = self.saved_values.get("profiles", {})
         if name in user_profiles:
             del user_profiles[name]
+        if name in DEFAULT_PROFILES:
+            deleted = self.saved_values.setdefault("deleted_profiles", [])
+            if name not in deleted:
+                deleted.append(name)
         if self.saved_values.get("active_profile") == name:
             self.saved_values["active_profile"] = PROFILE_CUSTOM
         await self._save_state()

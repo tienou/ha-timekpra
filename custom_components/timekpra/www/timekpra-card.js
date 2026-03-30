@@ -176,9 +176,7 @@ class TimekpraCard extends HTMLElement {
     const profileOptions = profileState && profileState.attributes.options ? profileState.attributes.options : ["Personnalisé"];
     const isCustomProfile = activeProfile === "Personnalisé";
     const isOverrideProfile = activeProfile === "Déblocage temporaire";
-    const builtInProfiles = ["Personnalisé", "Déblocage temporaire", "École", "Vacances", "Chez Papi Mamie"];
-    const isBuiltIn = builtInProfiles.includes(activeProfile);
-    const canDelete = !isBuiltIn;
+    const canDelete = !isCustomProfile && !isOverrideProfile;
     const canSave = !isOverrideProfile;
 
     const timeRemaining = this._stateValue(this._entity("sensor", "temps_restant_aujourd_hui"));
