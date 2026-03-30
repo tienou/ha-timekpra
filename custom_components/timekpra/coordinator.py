@@ -285,13 +285,18 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data["weekly_limit"] = UNLIMITED_WEEKLY
             data["monthly_limit"] = UNLIMITED_MONTHLY
 
-            await self.async_apply("set_allowed_hours", 0, 23, 0, 59)
-            await self.async_apply("set_time_limits", [UNLIMITED_DAILY] * 7)
-            await self.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
-            await self.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
-            await self.async_apply("set_time_left", "=", 86400)
+            # Update UI immediately, then push SSH commands in background
             self.async_set_updated_data(data)
             _LOGGER.info("Applied profile: %s (override ON)", name)
+
+            async def _push_override():
+                await self.async_apply("set_allowed_hours", 0, 23, 0, 59)
+                await self.async_apply("set_time_limits", [UNLIMITED_DAILY] * 7)
+                await self.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
+                await self.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
+                await self.async_apply("set_time_left", "=", 86400)
+
+            self.hass.async_create_task(_push_override())
             return
 
         # ── Normal profile ─────────────────────────────────────────
@@ -316,40 +321,44 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     val = list(val)
                 data[key] = val
 
-        # Push settings to remote machine
-        await self.async_apply(
-            "set_allowed_days",
-            profile.get("allowed_days", data.get("allowed_days", [1, 2, 3, 4, 5, 6, 7])),
-        )
-        await self.async_apply(
-            "set_allowed_hours",
-            profile.get("hour_start", 0),
-            profile.get("hour_end", 23),
-            profile.get("minute_start", 0),
-            profile.get("minute_end", 59),
-        )
-        await self.async_apply(
-            "set_time_limits",
-            list(profile.get("daily_limits", [60] * 7)),
-        )
-        await self.async_apply(
-            "set_time_limit_week",
-            profile.get("weekly_limit", 9),
-        )
-        await self.async_apply(
-            "set_time_limit_month",
-            profile.get("monthly_limit", 40),
-        )
-        await self.async_apply(
-            "set_track_inactive",
-            profile.get("track_inactive", False),
-        )
-        await self.async_apply(
-            "set_lockout_type",
-            profile.get("lockout_type", "lock"),
-        )
+        # Update UI immediately, then push SSH commands in background
         self.async_set_updated_data(data)
         _LOGGER.info("Applied profile: %s", name)
+
+        async def _push_profile():
+            await self.async_apply(
+                "set_allowed_days",
+                profile.get("allowed_days", data.get("allowed_days", [1, 2, 3, 4, 5, 6, 7])),
+            )
+            await self.async_apply(
+                "set_allowed_hours",
+                profile.get("hour_start", 0),
+                profile.get("hour_end", 23),
+                profile.get("minute_start", 0),
+                profile.get("minute_end", 59),
+            )
+            await self.async_apply(
+                "set_time_limits",
+                list(profile.get("daily_limits", [60] * 7)),
+            )
+            await self.async_apply(
+                "set_time_limit_week",
+                profile.get("weekly_limit", 9),
+            )
+            await self.async_apply(
+                "set_time_limit_month",
+                profile.get("monthly_limit", 40),
+            )
+            await self.async_apply(
+                "set_track_inactive",
+                profile.get("track_inactive", False),
+            )
+            await self.async_apply(
+                "set_lockout_type",
+                profile.get("lockout_type", "lock"),
+            )
+
+        self.hass.async_create_task(_push_profile())
 
     # ── Coordinator refresh ────────────────────────────────────────
 
