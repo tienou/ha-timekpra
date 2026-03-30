@@ -27,7 +27,22 @@ class TimekpraCard extends HTMLElement {
   }
 
   set hass(hass) {
+    const oldHass = this._hass;
     this._hass = hass;
+    // Skip re-render if an input inside the card is focused (user is typing)
+    if (this.shadowRoot && this.shadowRoot.activeElement &&
+        (this.shadowRoot.activeElement.tagName === "INPUT" || this.shadowRoot.activeElement.tagName === "SELECT")) {
+      return;
+    }
+    // Skip re-render if relevant entity states haven't changed
+    if (oldHass && this.config) {
+      const p = `timekpra_${this.config.target_user}`;
+      const changed = Object.keys(hass.states).some((eid) => {
+        if (!eid.includes(p)) return false;
+        return hass.states[eid] !== oldHass.states[eid];
+      });
+      if (!changed) return;
+    }
     this._render();
   }
 
