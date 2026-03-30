@@ -17,7 +17,11 @@ from .const import (
     DEFAULT_PROFILES,
     DOMAIN,
     PROFILE_CUSTOM,
+    PROFILE_OVERRIDE,
     SCAN_INTERVAL_SECONDS,
+    UNLIMITED_DAILY,
+    UNLIMITED_MONTHLY,
+    UNLIMITED_WEEKLY,
 )
 from .ssh import TimekpraSSH
 
@@ -184,8 +188,8 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def profile_names(self) -> list[str]:
-        """Ordered list: Personnalisé + all profile names."""
-        return [PROFILE_CUSTOM] + sorted(self.profiles.keys())
+        """Ordered list: Personnalisé + sorted profiles + Déblocage temporaire."""
+        return [PROFILE_CUSTOM] + sorted(self.profiles.keys()) + [PROFILE_OVERRIDE]
 
     @property
     def active_profile(self) -> str:
@@ -193,6 +197,9 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_save_profile(self, name: str) -> None:
         """Save current settings as a named profile."""
+        if name == PROFILE_OVERRIDE:
+            _LOGGER.warning("Cannot save over built-in profile: %s", name)
+            return
         if not self.data:
             return
         snapshot = {k: self.data[k] for k in self._PROFILE_KEYS if k in self.data}
@@ -207,7 +214,10 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.info("Saved profile: %s", name)
 
     async def async_delete_profile(self, name: str) -> None:
-        """Delete a user-created profile (cannot delete defaults)."""
+        """Delete a user-created profile (cannot delete defaults or override)."""
+        if name == PROFILE_OVERRIDE:
+            _LOGGER.warning("Cannot delete built-in profile: %s", name)
+            return
         user_profiles = self.saved_values.get("profiles", {})
         if name in user_profiles:
             del user_profiles[name]
@@ -220,20 +230,65 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Load a profile and apply all its settings to timekpra."""
         if name == PROFILE_CUSTOM:
             self.saved_values["active_profile"] = PROFILE_CUSTOM
+            self.saved_values["override_active"] = False
             await self._save_state()
             return
 
+        data = self.data
+        if not data:
+            return
+
+        self.saved_values["active_profile"] = name
+
+        if name == PROFILE_OVERRIDE:
+            # ── Déblocage temporaire: save current state, set everything unlimited
+            self.saved_values["override_active"] = True
+            self.saved_values["override_hours"] = {
+                "hour_start": data.get("hour_start", 0),
+                "hour_end": data.get("hour_end", 23),
+                "minute_start": data.get("minute_start", 0),
+                "minute_end": data.get("minute_end", 59),
+            }
+            current_daily = data.get("daily_limits", [60] * 7)
+            if any(v < UNLIMITED_DAILY for v in current_daily):
+                self.saved_values["override_daily"] = list(current_daily)
+            current_weekly = data.get("weekly_limit", 9)
+            if current_weekly < UNLIMITED_WEEKLY:
+                self.saved_values["override_weekly"] = current_weekly
+            current_monthly = data.get("monthly_limit", 40)
+            if current_monthly < UNLIMITED_MONTHLY:
+                self.saved_values["override_monthly"] = current_monthly
+            await self._save_state()
+
+            data["hour_start"] = 0
+            data["hour_end"] = 23
+            data["minute_start"] = 0
+            data["minute_end"] = 59
+            data["daily_limits"] = [UNLIMITED_DAILY] * 7
+            data["weekly_limit"] = UNLIMITED_WEEKLY
+            data["monthly_limit"] = UNLIMITED_MONTHLY
+
+            await self.async_apply("set_allowed_hours", 0, 23, 0, 59)
+            await self.async_apply("set_time_limits", [UNLIMITED_DAILY] * 7)
+            await self.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
+            await self.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
+            await self.async_apply("set_time_left", "=", 86400)
+            _LOGGER.info("Applied profile: %s (override ON)", name)
+            return
+
+        # ── Normal profile ─────────────────────────────────────────
         profile = self.profiles.get(name)
         if not profile:
             _LOGGER.warning("Profile not found: %s", name)
             return
 
-        self.saved_values["active_profile"] = name
+        # Disable override if it was active
+        self.saved_values["override_active"] = False
+        self.saved_values.pop("override_hours", None)
+        self.saved_values.pop("override_daily", None)
+        self.saved_values.pop("override_weekly", None)
+        self.saved_values.pop("override_monthly", None)
         await self._save_state()
-
-        data = self.data
-        if not data:
-            return
 
         # Apply all profile values to coordinator data
         for key in self._PROFILE_KEYS:
@@ -245,7 +300,8 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Push settings to remote machine
         await self.async_apply(
-            "set_allowed_days", profile.get("allowed_days", data.get("allowed_days", [1,2,3,4,5,6,7]))
+            "set_allowed_days",
+            profile.get("allowed_days", data.get("allowed_days", [1, 2, 3, 4, 5, 6, 7])),
         )
         await self.async_apply(
             "set_allowed_hours",
@@ -256,7 +312,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         await self.async_apply(
             "set_time_limits",
-            list(profile.get("daily_limits", [60]*7)),
+            list(profile.get("daily_limits", [60] * 7)),
         )
         await self.async_apply(
             "set_time_limit_week",

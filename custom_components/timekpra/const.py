@@ -35,6 +35,7 @@ DEFAULT_NOTIFICATION_THRESHOLD = 15  # minutes avant verrouillage
 
 # ── Profils prédéfinis ─────────────────────────────────────────────
 PROFILE_CUSTOM = "Personnalisé"
+PROFILE_OVERRIDE = "Déblocage temporaire"
 
 DEFAULT_PROFILES = {
     "École": {

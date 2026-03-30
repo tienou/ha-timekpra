@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.7.0";
+const CARD_VERSION = "1.8.0";
 
 class TimekpraCard extends HTMLElement {
   static get properties() {
@@ -147,6 +147,11 @@ class TimekpraCard extends HTMLElement {
     const activeProfile = profileState ? profileState.state : "Personnalisé";
     const profileOptions = profileState && profileState.attributes.options ? profileState.attributes.options : ["Personnalisé"];
     const isCustomProfile = activeProfile === "Personnalisé";
+    const isOverrideProfile = activeProfile === "Déblocage temporaire";
+    const builtInProfiles = ["Personnalisé", "Déblocage temporaire", "École", "Vacances", "Chez Papi Mamie"];
+    const isBuiltIn = builtInProfiles.includes(activeProfile);
+    const canDelete = !isBuiltIn;
+    const canSave = !isOverrideProfile;
 
     const timeRemaining = this._stateValue(this._entity("sensor", "temps_restant_aujourd_hui"));
     const notifThresholdEid = this._entity("number", "notification_avant_verrouillage");
@@ -446,16 +451,16 @@ class TimekpraCard extends HTMLElement {
                   `<option value="${opt}" ${activeProfile === opt ? "selected" : ""}>${opt}</option>`
                 ).join("")}
               </select>
-              ${!isCustomProfile ? `<button class="tkp-icon-btn danger" id="tkp-profile-delete" title="Supprimer ce profil">
+              ${canDelete ? `<button class="tkp-icon-btn danger" id="tkp-profile-delete" title="Supprimer ce profil">
                 <ha-icon icon="mdi:delete" style="--mdc-icon-size:16px"></ha-icon>
               </button>` : ""}
             </div>
-            <div class="tkp-profile-actions">
+            ${canSave ? `<div class="tkp-profile-actions">
               <input type="text" id="tkp-profile-name" placeholder="Nom du profil..." value="${isCustomProfile ? "" : activeProfile}">
               <button class="tkp-icon-btn" id="tkp-profile-save" title="Sauvegarder les réglages actuels">
                 <ha-icon icon="mdi:content-save" style="--mdc-icon-size:16px"></ha-icon>
               </button>
-            </div>
+            </div>` : ""}
           </div>
 
           <!-- Stats -->
