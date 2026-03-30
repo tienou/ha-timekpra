@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.8.0";
+const CARD_VERSION = "1.9.0";
 
 class TimekpraCard extends HTMLElement {
   static get properties() {
@@ -135,8 +135,6 @@ class TimekpraCard extends HTMLElement {
     const monthlyLimitEid = this._entity("number", "limite_mensuelle");
     const weeklyLimit = this._stateValue(weeklyLimitEid);
     const monthlyLimit = this._stateValue(monthlyLimitEid);
-
-    const overrideActive = this._stateValue(this._entity("switch", "deblocage_temporaire")) === "on";
 
     const lockoutType = this._stateValue(this._entity("select", "action_fin_de_temps"));
     const trackInactive = this._stateValue(this._entity("switch", "compter_le_temps_inactif")) === "on";
@@ -345,41 +343,6 @@ class TimekpraCard extends HTMLElement {
             cursor: pointer; outline: none;
           }
           .tkp-select:hover { border-color: var(--primary-color); }
-          .tkp-override {
-            display: flex; align-items: center; gap: 10px;
-            padding: 10px 12px; margin-bottom: 16px;
-            border-radius: 12px; cursor: pointer; user-select: none;
-            transition: all 0.2s;
-          }
-          .tkp-override.active {
-            background: rgba(255, 152, 0, 0.12);
-            border: 1px solid var(--warning-color, #ff9800);
-          }
-          .tkp-override.inactive {
-            background: var(--card-background-color, var(--ha-card-background));
-            border: 1px solid var(--divider-color);
-          }
-          .tkp-override:hover { opacity: 0.85; }
-          .tkp-override-checkbox {
-            width: 20px; height: 20px; border-radius: 4px;
-            border: 2px solid var(--divider-color); display: flex;
-            align-items: center; justify-content: center;
-            transition: all 0.2s; flex-shrink: 0;
-          }
-          .tkp-override.active .tkp-override-checkbox {
-            background: var(--warning-color, #ff9800);
-            border-color: var(--warning-color, #ff9800);
-          }
-          .tkp-override-checkbox ha-icon {
-            --mdc-icon-size: 14px; color: white;
-          }
-          .tkp-override-label { font-size: 14px; font-weight: 500; }
-          .tkp-override-desc {
-            font-size: 11px; color: var(--secondary-text-color);
-          }
-          .tkp-override.active .tkp-override-label {
-            color: var(--warning-color, #ff9800);
-          }
           .tkp-profile-section {
             margin-bottom: 16px; padding: 12px;
             background: var(--card-background-color, var(--ha-card-background));
@@ -429,16 +392,6 @@ class TimekpraCard extends HTMLElement {
             </div>
           </div>
 
-          <!-- Override -->
-          <div class="tkp-override ${overrideActive ? "active" : "inactive"}" data-toggle="${this._entity("switch", "deblocage_temporaire")}">
-            <div class="tkp-override-checkbox">
-              ${overrideActive ? '<ha-icon icon="mdi:check"></ha-icon>' : ""}
-            </div>
-            <div>
-              <div class="tkp-override-label">${overrideActive ? "Déblocage actif" : "Déblocage temporaire"}</div>
-              <div class="tkp-override-desc">${overrideActive ? "Toutes les restrictions sont ignorées" : "Cocher pour ignorer toutes les restrictions"}</div>
-            </div>
-          </div>
 
           <!-- Profile -->
           <div class="tkp-profile-section">
