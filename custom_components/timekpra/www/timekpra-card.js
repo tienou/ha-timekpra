@@ -603,22 +603,33 @@ class TimekpraCard extends HTMLElement {
       }
     });
 
-    // Prevent HA from capturing keyboard events inside the profile input
+    // Prevent HA from capturing events inside the profile input
+    // and persist value so it survives re-renders
     const profileInput = this.shadowRoot.querySelector("#tkp-profile-name");
     if (profileInput) {
       for (const evt of ["keydown", "keyup", "keypress", "pointerdown", "mousedown", "touchstart", "click", "focus"]) {
         profileInput.addEventListener(evt, (e) => e.stopPropagation());
       }
+      profileInput.addEventListener("input", () => {
+        this._profileInputValue = profileInput.value;
+      });
+      // Restore persisted value if re-rendered
+      if (this._profileInputValue !== undefined) {
+        profileInput.value = this._profileInputValue;
+      }
     }
 
-    // Bind profile save
+    // Bind profile save (use mousedown to fire BEFORE blur resets the input)
     const saveBtn = this.shadowRoot.querySelector("#tkp-profile-save");
     if (saveBtn) {
-      saveBtn.addEventListener("click", (e) => {
+      saveBtn.addEventListener("mousedown", (e) => {
         e.stopPropagation();
-        const input = this.shadowRoot.querySelector("#tkp-profile-name");
-        if (input && input.value.trim()) {
-          this._saveProfile(input.value.trim());
+        e.preventDefault();
+        const name = this._profileInputValue || (profileInput && profileInput.value) || "";
+        if (name.trim()) {
+          this._saveProfile(name.trim());
+          this._profileInputValue = "";
+          if (profileInput) profileInput.value = "";
         }
       });
     }
