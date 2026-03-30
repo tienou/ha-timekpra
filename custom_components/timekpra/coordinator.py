@@ -243,7 +243,12 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.saved_values["active_profile"] = PROFILE_CUSTOM
             self.saved_values["override_active"] = False
             await self._save_state()
-            self.async_update_listeners()
+            # Use async_set_updated_data to atomically set data + notify
+            # (avoids race with periodic _async_update_data replacing self.data)
+            if self.data:
+                self.async_set_updated_data(self.data)
+            else:
+                self.async_update_listeners()
             return
 
         data = self.data
@@ -285,7 +290,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
             await self.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
             await self.async_apply("set_time_left", "=", 86400)
-            self.async_update_listeners()
+            self.async_set_updated_data(data)
             _LOGGER.info("Applied profile: %s (override ON)", name)
             return
 
@@ -343,7 +348,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "set_lockout_type",
             profile.get("lockout_type", "lock"),
         )
-        self.async_update_listeners()
+        self.async_set_updated_data(data)
         _LOGGER.info("Applied profile: %s", name)
 
     # ── Coordinator refresh ────────────────────────────────────────
