@@ -634,11 +634,12 @@ class TimekpraCard extends HTMLElement {
       });
     }
 
-    // Bind profile delete
+    // Bind profile delete (mousedown to avoid event interception)
     const deleteBtn = this.shadowRoot.querySelector("#tkp-profile-delete");
     if (deleteBtn) {
-      deleteBtn.addEventListener("click", (e) => {
+      deleteBtn.addEventListener("mousedown", (e) => {
         e.stopPropagation();
+        e.preventDefault();
         this._deleteProfile(activeProfile);
       });
     }
