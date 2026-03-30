@@ -117,12 +117,16 @@ class TimekpraCard extends HTMLElement {
 
   _saveProfile(name) {
     if (!name || !name.trim()) return;
-    this._hass.callService("timekpra", "save_profile", { name: name.trim() });
+    this._hass.callService("timekpra", "save_profile", { name: name.trim() }).then(() => {
+      setTimeout(() => this._render(), 1000);
+    });
   }
 
   _deleteProfile(name) {
     if (!name || name === "Personnalisé") return;
-    this._hass.callService("timekpra", "delete_profile", { name });
+    this._hass.callService("timekpra", "delete_profile", { name }).then(() => {
+      setTimeout(() => this._render(), 1000);
+    });
   }
 
   _render() {

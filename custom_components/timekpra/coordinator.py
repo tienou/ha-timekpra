@@ -211,6 +211,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         user_profiles[name] = snapshot
         self.saved_values["active_profile"] = name
         await self._save_state()
+        self.async_update_listeners()
         _LOGGER.info("Saved profile: %s", name)
 
     async def async_delete_profile(self, name: str) -> None:
@@ -224,6 +225,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.saved_values.get("active_profile") == name:
             self.saved_values["active_profile"] = PROFILE_CUSTOM
         await self._save_state()
+        self.async_update_listeners()
         _LOGGER.info("Deleted profile: %s", name)
 
     async def async_apply_profile(self, name: str) -> None:
