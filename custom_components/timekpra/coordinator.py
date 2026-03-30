@@ -12,7 +12,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .const import DOMAIN, SCAN_INTERVAL_SECONDS, DEFAULT_NOTIFICATION_THRESHOLD
+from .const import (
+    DEFAULT_NOTIFICATION_THRESHOLD,
+    DEFAULT_PROFILES,
+    DOMAIN,
+    PROFILE_CUSTOM,
+    SCAN_INTERVAL_SECONDS,
+)
 from .ssh import TimekpraSSH
 
 _LOGGER = logging.getLogger(__name__)
@@ -152,6 +158,123 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def pending_count(self) -> int:
         return len(self._pending)
+
+    # ── Profiles ───────────────────────────────────────────────────
+
+    _PROFILE_KEYS = (
+        "allowed_days",
+        "hour_start",
+        "hour_end",
+        "minute_start",
+        "minute_end",
+        "daily_limits",
+        "weekly_limit",
+        "monthly_limit",
+        "track_inactive",
+        "lockout_type",
+    )
+
+    @property
+    def profiles(self) -> dict[str, dict[str, Any]]:
+        """Return merged default + user profiles."""
+        user_profiles = self.saved_values.get("profiles", {})
+        merged = dict(DEFAULT_PROFILES)
+        merged.update(user_profiles)
+        return merged
+
+    @property
+    def profile_names(self) -> list[str]:
+        """Ordered list: Personnalisé + all profile names."""
+        return [PROFILE_CUSTOM] + sorted(self.profiles.keys())
+
+    @property
+    def active_profile(self) -> str:
+        return self.saved_values.get("active_profile", PROFILE_CUSTOM)
+
+    async def async_save_profile(self, name: str) -> None:
+        """Save current settings as a named profile."""
+        if not self.data:
+            return
+        snapshot = {k: self.data[k] for k in self._PROFILE_KEYS if k in self.data}
+        if "daily_limits" in snapshot:
+            snapshot["daily_limits"] = list(snapshot["daily_limits"])
+        if "allowed_days" in snapshot:
+            snapshot["allowed_days"] = list(snapshot["allowed_days"])
+        user_profiles = self.saved_values.setdefault("profiles", {})
+        user_profiles[name] = snapshot
+        self.saved_values["active_profile"] = name
+        await self._save_state()
+        _LOGGER.info("Saved profile: %s", name)
+
+    async def async_delete_profile(self, name: str) -> None:
+        """Delete a user-created profile (cannot delete defaults)."""
+        user_profiles = self.saved_values.get("profiles", {})
+        if name in user_profiles:
+            del user_profiles[name]
+        if self.saved_values.get("active_profile") == name:
+            self.saved_values["active_profile"] = PROFILE_CUSTOM
+        await self._save_state()
+        _LOGGER.info("Deleted profile: %s", name)
+
+    async def async_apply_profile(self, name: str) -> None:
+        """Load a profile and apply all its settings to timekpra."""
+        if name == PROFILE_CUSTOM:
+            self.saved_values["active_profile"] = PROFILE_CUSTOM
+            await self._save_state()
+            return
+
+        profile = self.profiles.get(name)
+        if not profile:
+            _LOGGER.warning("Profile not found: %s", name)
+            return
+
+        self.saved_values["active_profile"] = name
+        await self._save_state()
+
+        data = self.data
+        if not data:
+            return
+
+        # Apply all profile values to coordinator data
+        for key in self._PROFILE_KEYS:
+            if key in profile:
+                val = profile[key]
+                if isinstance(val, list):
+                    val = list(val)
+                data[key] = val
+
+        # Push settings to remote machine
+        await self.async_apply(
+            "set_allowed_days", profile.get("allowed_days", data.get("allowed_days", [1,2,3,4,5,6,7]))
+        )
+        await self.async_apply(
+            "set_allowed_hours",
+            profile.get("hour_start", 0),
+            profile.get("hour_end", 23),
+            profile.get("minute_start", 0),
+            profile.get("minute_end", 59),
+        )
+        await self.async_apply(
+            "set_time_limits",
+            list(profile.get("daily_limits", [60]*7)),
+        )
+        await self.async_apply(
+            "set_time_limit_week",
+            profile.get("weekly_limit", 9),
+        )
+        await self.async_apply(
+            "set_time_limit_month",
+            profile.get("monthly_limit", 40),
+        )
+        await self.async_apply(
+            "set_track_inactive",
+            profile.get("track_inactive", False),
+        )
+        await self.async_apply(
+            "set_lockout_type",
+            profile.get("lockout_type", "lock"),
+        )
+        _LOGGER.info("Applied profile: %s", name)
 
     # ── Coordinator refresh ────────────────────────────────────────
 

@@ -5,9 +5,12 @@ import logging
 import shutil
 from pathlib import Path
 
+import voluptuous as vol
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
+import homeassistant.helpers.config_validation as cv
 
 from .const import (
     CONF_SSH_HOST,
@@ -83,6 +86,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # ── Profile services ───────────────────────────────────────────
+    async def _get_coordinator(call: ServiceCall) -> TimekpraCoordinator:
+        entry_id = call.data.get("entry_id")
+        if entry_id:
+            return hass.data[DOMAIN][entry_id]["coordinator"]
+        # If only one entry, use it automatically
+        entries = list(hass.data[DOMAIN].values())
+        if len(entries) == 1:
+            return entries[0]["coordinator"]
+        raise ValueError("Specify entry_id when multiple devices are configured")
+
+    async def _handle_save_profile(call: ServiceCall) -> None:
+        coordinator = await _get_coordinator(call)
+        await coordinator.async_save_profile(call.data["name"])
+
+    async def _handle_delete_profile(call: ServiceCall) -> None:
+        coordinator = await _get_coordinator(call)
+        await coordinator.async_delete_profile(call.data["name"])
+
+    profile_schema = vol.Schema({
+        vol.Required("name"): cv.string,
+        vol.Optional("entry_id"): cv.string,
+    })
+
+    if not hass.services.has_service(DOMAIN, "save_profile"):
+        hass.services.async_register(
+            DOMAIN, "save_profile", _handle_save_profile, schema=profile_schema
+        )
+        hass.services.async_register(
+            DOMAIN, "delete_profile", _handle_delete_profile, schema=profile_schema
+        )
 
     # Reload integration when options are changed
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))

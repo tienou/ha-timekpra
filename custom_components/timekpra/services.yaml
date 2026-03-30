@@ -1,0 +1,33 @@
+save_profile:
+  name: Sauvegarder un profil
+  description: Sauvegarde les réglages actuels dans un profil nommé
+  fields:
+    name:
+      name: Nom du profil
+      description: Nom du profil à sauvegarder (ex. École, Vacances)
+      required: true
+      selector:
+        text:
+    entry_id:
+      name: Entry ID
+      description: ID de l'entrée de configuration (optionnel si un seul appareil)
+      required: false
+      selector:
+        text:
+
+delete_profile:
+  name: Supprimer un profil
+  description: Supprime un profil utilisateur
+  fields:
+    name:
+      name: Nom du profil
+      description: Nom du profil à supprimer
+      required: true
+      selector:
+        text:
+    entry_id:
+      name: Entry ID
+      description: ID de l'entrée de configuration (optionnel si un seul appareil)
+      required: false
+      selector:
+        text:

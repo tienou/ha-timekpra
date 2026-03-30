@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, LOCKOUT_TYPES
+from .const import DOMAIN, LOCKOUT_TYPES, PROFILE_CUSTOM
 from .coordinator import TimekpraCoordinator
 from .entity import TimekpraEntity
 from .ssh import TimekpraSSH
@@ -27,9 +27,10 @@ async def async_setup_entry(
     ssh: TimekpraSSH = data["ssh"]
     target_user: str = data["target_user"]
 
-    async_add_entities(
-        [TimekpraLockoutType(coordinator, ssh, target_user, entry)]
-    )
+    async_add_entities([
+        TimekpraLockoutType(coordinator, ssh, target_user, entry),
+        TimekpraProfileSelect(coordinator, target_user, entry),
+    ])
 
 
 class TimekpraLockoutType(TimekpraEntity, SelectEntity):
@@ -52,3 +53,26 @@ class TimekpraLockoutType(TimekpraEntity, SelectEntity):
         self.coordinator.data["lockout_type"] = option
         self.async_write_ha_state()
         await self.coordinator.async_apply("set_lockout_type", option)
+
+
+class TimekpraProfileSelect(TimekpraEntity, SelectEntity):
+    """Select which profile to apply (École, Vacances, etc.)."""
+
+    _attr_icon = "mdi:account-switch"
+
+    def __init__(self, coordinator, target_user, entry) -> None:
+        super().__init__(coordinator, target_user)
+        self._attr_unique_id = f"{entry.entry_id}_profile"
+        self._attr_name = "Profil"
+
+    @property
+    def options(self) -> list[str]:
+        return self.coordinator.profile_names
+
+    @property
+    def current_option(self) -> str | None:
+        return self.coordinator.active_profile
+
+    async def async_select_option(self, option: str) -> None:
+        await self.coordinator.async_apply_profile(option)
+        self.async_write_ha_state()

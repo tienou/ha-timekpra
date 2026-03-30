@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.6.0";
+const CARD_VERSION = "1.7.0";
 
 class TimekpraCard extends HTMLElement {
   static get properties() {
@@ -89,6 +89,16 @@ class TimekpraCard extends HTMLElement {
     this.dispatchEvent(event);
   }
 
+  _saveProfile(name) {
+    if (!name || !name.trim()) return;
+    this._hass.callService("timekpra", "save_profile", { name: name.trim() });
+  }
+
+  _deleteProfile(name) {
+    if (!name || name === "Personnalisé") return;
+    this._hass.callService("timekpra", "delete_profile", { name });
+  }
+
   _render() {
     if (!this.config || !this._hass) return;
 
@@ -130,6 +140,13 @@ class TimekpraCard extends HTMLElement {
 
     const lockoutType = this._stateValue(this._entity("select", "action_fin_de_temps"));
     const trackInactive = this._stateValue(this._entity("switch", "compter_le_temps_inactif")) === "on";
+
+    // Profile
+    const profileSelectEid = this._entity("select", "profil");
+    const profileState = this._state(profileSelectEid);
+    const activeProfile = profileState ? profileState.state : "Personnalisé";
+    const profileOptions = profileState && profileState.attributes.options ? profileState.attributes.options : ["Personnalisé"];
+    const isCustomProfile = activeProfile === "Personnalisé";
 
     const timeRemaining = this._stateValue(this._entity("sensor", "temps_restant_aujourd_hui"));
     const notifThresholdEid = this._entity("number", "notification_avant_verrouillage");
@@ -358,6 +375,35 @@ class TimekpraCard extends HTMLElement {
           .tkp-override.active .tkp-override-label {
             color: var(--warning-color, #ff9800);
           }
+          .tkp-profile-section {
+            margin-bottom: 16px; padding: 12px;
+            background: var(--card-background-color, var(--ha-card-background));
+            border: 1px solid var(--divider-color); border-radius: 12px;
+          }
+          .tkp-profile-row {
+            display: flex; align-items: center; gap: 8px;
+          }
+          .tkp-profile-row .tkp-select { flex: 1; }
+          .tkp-profile-actions {
+            display: flex; align-items: center; gap: 6px; margin-top: 8px;
+          }
+          .tkp-profile-actions input {
+            flex: 1; padding: 6px 10px; border: 1px solid var(--divider-color);
+            border-radius: 8px; font-size: 13px; background: transparent;
+            color: var(--primary-text-color); outline: none;
+          }
+          .tkp-profile-actions input:focus { border-color: var(--primary-color); }
+          .tkp-profile-actions input::placeholder { color: var(--secondary-text-color); }
+          .tkp-icon-btn {
+            width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--divider-color);
+            background: var(--card-background-color, var(--ha-card-background));
+            color: var(--primary-text-color); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s; padding: 0; flex-shrink: 0;
+          }
+          .tkp-icon-btn:hover { background: var(--primary-color); color: white; border-color: var(--primary-color); }
+          .tkp-icon-btn.danger:hover { background: var(--error-color, #f44336); border-color: var(--error-color, #f44336); }
+          .tkp-icon-btn:active { transform: scale(0.9); }
         </style>
 
         <div class="tkp-card">
@@ -386,6 +432,29 @@ class TimekpraCard extends HTMLElement {
             <div>
               <div class="tkp-override-label">${overrideActive ? "Déblocage actif" : "Déblocage temporaire"}</div>
               <div class="tkp-override-desc">${overrideActive ? "Toutes les restrictions sont ignorées" : "Cocher pour ignorer toutes les restrictions"}</div>
+            </div>
+          </div>
+
+          <!-- Profile -->
+          <div class="tkp-profile-section">
+            <div class="tkp-section-title" style="margin-bottom: 10px">
+              <ha-icon icon="mdi:account-switch" style="--mdc-icon-size:16px"></ha-icon> Profil
+            </div>
+            <div class="tkp-profile-row">
+              <select class="tkp-select" id="tkp-profile-select" data-select="${profileSelectEid}">
+                ${profileOptions.map((opt) =>
+                  `<option value="${opt}" ${activeProfile === opt ? "selected" : ""}>${opt}</option>`
+                ).join("")}
+              </select>
+              ${!isCustomProfile ? `<button class="tkp-icon-btn danger" id="tkp-profile-delete" title="Supprimer ce profil">
+                <ha-icon icon="mdi:delete" style="--mdc-icon-size:16px"></ha-icon>
+              </button>` : ""}
+            </div>
+            <div class="tkp-profile-actions">
+              <input type="text" id="tkp-profile-name" placeholder="Nom du profil..." value="${isCustomProfile ? "" : activeProfile}">
+              <button class="tkp-icon-btn" id="tkp-profile-save" title="Sauvegarder les réglages actuels">
+                <ha-icon icon="mdi:content-save" style="--mdc-icon-size:16px"></ha-icon>
+              </button>
             </div>
           </div>
 
@@ -545,6 +614,27 @@ class TimekpraCard extends HTMLElement {
         this._setSelect(el.dataset.select, e.target.value);
       });
     });
+
+    // Bind profile save
+    const saveBtn = this.shadowRoot.querySelector("#tkp-profile-save");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const input = this.shadowRoot.querySelector("#tkp-profile-name");
+        if (input && input.value.trim()) {
+          this._saveProfile(input.value.trim());
+        }
+      });
+    }
+
+    // Bind profile delete
+    const deleteBtn = this.shadowRoot.querySelector("#tkp-profile-delete");
+    if (deleteBtn) {
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._deleteProfile(activeProfile);
+      });
+    }
   }
 
   getCardSize() {
