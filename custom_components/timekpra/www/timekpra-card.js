@@ -432,14 +432,17 @@ class TimekpraCard extends HTMLElement {
                   `<option value="${opt}" ${activeProfile === opt ? "selected" : ""}>${opt}</option>`
                 ).join("")}
               </select>
-              ${canDelete ? `<button class="tkp-icon-btn danger" id="tkp-profile-delete" title="Supprimer ce profil">
+              ${canDelete ? `<button class="tkp-icon-btn" id="tkp-profile-update" title="Mettre à jour ce profil">
+                <ha-icon icon="mdi:content-save-edit" style="--mdc-icon-size:16px"></ha-icon>
+              </button>
+              <button class="tkp-icon-btn danger" id="tkp-profile-delete" title="Supprimer ce profil">
                 <ha-icon icon="mdi:delete" style="--mdc-icon-size:16px"></ha-icon>
               </button>` : ""}
             </div>
             ${canSave ? `<div class="tkp-profile-actions">
-              <input type="text" id="tkp-profile-name" placeholder="Nom du profil..." value="${isCustomProfile ? "" : activeProfile}">
-              <button class="tkp-icon-btn" id="tkp-profile-save" title="Sauvegarder les réglages actuels">
-                <ha-icon icon="mdi:content-save" style="--mdc-icon-size:16px"></ha-icon>
+              <input type="text" id="tkp-profile-name" placeholder="Nouveau profil...">
+              <button class="tkp-icon-btn" id="tkp-profile-save" title="Créer un nouveau profil">
+                <ha-icon icon="mdi:plus" style="--mdc-icon-size:16px"></ha-icon>
               </button>
             </div>` : ""}
           </div>
@@ -633,6 +636,16 @@ class TimekpraCard extends HTMLElement {
           this._profileInputValue = "";
           if (profileInput) profileInput.value = "";
         }
+      });
+    }
+
+    // Bind profile update (overwrite current profile with current settings)
+    const updateBtn = this.shadowRoot.querySelector("#tkp-profile-update");
+    if (updateBtn) {
+      updateBtn.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this._saveProfile(activeProfile);
       });
     }
 
