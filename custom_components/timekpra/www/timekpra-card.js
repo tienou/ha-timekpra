@@ -42,7 +42,7 @@ class TimekpraCard extends HTMLElement {
     this._hass = hass;
     // Skip re-render if an input inside the card is focused (user is typing)
     if (this.shadowRoot && this.shadowRoot.activeElement &&
-        (this.shadowRoot.activeElement.tagName === "INPUT" || this.shadowRoot.activeElement.tagName === "SELECT")) {
+        this.shadowRoot.activeElement.tagName === "INPUT") {
       return;
     }
     // Skip re-render if relevant entity states haven't changed
