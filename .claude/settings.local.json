@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find '/c/Users/egaillard/Documents/Dev Claude/ha-timekpra' -type d -not -path */.git/*)",
+      "Bash(gh release:*)",
+      "Bash(python3 -m json.tool)",
+      "mcp__7bb03b67-1f2d-49ec-96db-e5c5a4010dd9__ha_get_integration",
+      "mcp__7bb03b67-1f2d-49ec-96db-e5c5a4010dd9__ha_call_service"
+    ]
+  }
+}
