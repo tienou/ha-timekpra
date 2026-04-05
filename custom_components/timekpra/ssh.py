@@ -37,8 +37,10 @@ class TimekpraSSH:
         port: int,
         username: str,
         password: str,
+        host_vpn: str = "",
     ) -> None:
         self._host = host
+        self._host_vpn = host_vpn
         self._port = port
         self._username = username
         self._password = password
@@ -50,37 +52,51 @@ class TimekpraSSH:
         safe_pw = self._password.replace("'", "'\\''")
         return f"echo '{safe_pw}' | sudo -S {command}"
 
-    async def execute(self, command: str) -> str:
-        """Execute a command via SSH using create_process for reliable output."""
+    async def _execute_on_host(self, host: str, command: str) -> str:
+        """Execute a command via SSH on a specific host."""
         _LOGGER.debug(
             "SSH connecting to %s@%s:%s",
-            self._username, self._host, self._port,
+            self._username, host, self._port,
         )
-        try:
-            async with asyncssh.connect(
-                self._host,
-                port=self._port,
-                username=self._username,
-                password=self._password,
-                known_hosts=None,
-                client_keys=[],
-            ) as conn:
-                proc = await conn.create_process(command)
-                stdout_data = await proc.stdout.read()
-                await proc.wait_closed()
-                return stdout_data or ""
-        except asyncssh.PermissionDenied as err:
-            _LOGGER.error("SSH auth failed (wrong password?): %s", err)
-            raise
-        except asyncssh.DisconnectError as err:
-            _LOGGER.error("SSH disconnect: code=%s reason=%s", err.code, err.reason)
-            raise
-        except OSError as err:
-            _LOGGER.error("SSH network error (host unreachable?): %s", err)
-            raise
-        except Exception as err:
-            _LOGGER.error("SSH unexpected error [%s]: %s", type(err).__name__, err)
-            raise
+        async with asyncssh.connect(
+            host,
+            port=self._port,
+            username=self._username,
+            password=self._password,
+            known_hosts=None,
+            client_keys=[],
+            login_timeout=10,
+        ) as conn:
+            proc = await conn.create_process(command)
+            stdout_data = await proc.stdout.read()
+            await proc.wait_closed()
+            return stdout_data or ""
+
+    async def execute(self, command: str) -> str:
+        """Execute a command via SSH, trying VPN host as fallback."""
+        hosts = [self._host]
+        if self._host_vpn:
+            hosts.append(self._host_vpn)
+
+        last_err: Exception | None = None
+        for host in hosts:
+            try:
+                return await self._execute_on_host(host, command)
+            except asyncssh.PermissionDenied as err:
+                _LOGGER.error("SSH auth failed on %s: %s", host, err)
+                raise
+            except asyncssh.DisconnectError as err:
+                _LOGGER.debug("SSH disconnect on %s: code=%s reason=%s", host, err.code, err.reason)
+                last_err = err
+            except OSError as err:
+                _LOGGER.debug("SSH unreachable on %s: %s", host, err)
+                last_err = err
+            except Exception as err:
+                _LOGGER.debug("SSH error on %s [%s]: %s", host, type(err).__name__, err)
+                last_err = err
+
+        _LOGGER.error("SSH failed on all hosts (%s): %s", ", ".join(hosts), last_err)
+        raise last_err  # type: ignore[misc]
 
     async def test_connection(self) -> bool:
         """Test SSH connectivity."""

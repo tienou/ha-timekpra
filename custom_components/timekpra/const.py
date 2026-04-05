@@ -3,6 +3,7 @@
 DOMAIN = "timekpra"
 
 CONF_SSH_HOST = "ssh_host"
+CONF_SSH_HOST_VPN = "ssh_host_vpn"
 CONF_SSH_PORT = "ssh_port"
 CONF_SSH_USER = "ssh_user"
 CONF_SSH_PASSWORD = "ssh_password"

@@ -6,10 +6,14 @@
         "description": "Configurez la connexion SSH vers la machine distante ex\u00e9cutant Timekpra.",
         "data": {
           "ssh_host": "H\u00f4te SSH",
+          "ssh_host_vpn": "H\u00f4te SSH (VPN)",
           "ssh_port": "Port SSH",
           "ssh_user": "Utilisateur SSH",
           "ssh_password": "Mot de passe SSH",
           "target_user": "Utilisateur Timekpra (nom de l'enfant)"
+        },
+        "data_description": {
+          "ssh_host_vpn": "Optionnel : adresse IP quand connect\u00e9 au VPN"
         }
       }
     },
@@ -26,10 +30,14 @@
         "title": "Modifier la connexion Timekpra",
         "data": {
           "ssh_host": "H\u00f4te SSH",
+          "ssh_host_vpn": "H\u00f4te SSH (VPN)",
           "ssh_port": "Port SSH",
           "ssh_user": "Utilisateur SSH",
           "ssh_password": "Mot de passe SSH",
           "target_user": "Utilisateur Timekpra (nom de l'enfant)"
+        },
+        "data_description": {
+          "ssh_host_vpn": "Optionnel : adresse IP quand connect\u00e9 au VPN"
         }
       }
     }

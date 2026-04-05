@@ -8,6 +8,7 @@ from homeassistant.core import callback
 
 from .const import (
     CONF_SSH_HOST,
+    CONF_SSH_HOST_VPN,
     CONF_SSH_PASSWORD,
     CONF_SSH_PORT,
     CONF_SSH_USER,
@@ -18,6 +19,7 @@ from .const import (
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_SSH_HOST): str,
+        vol.Optional(CONF_SSH_HOST_VPN, default=""): str,
         vol.Required(CONF_SSH_PORT, default=22): int,
         vol.Required(CONF_SSH_USER): str,
         vol.Required(CONF_SSH_PASSWORD): str,
@@ -80,6 +82,7 @@ class TimekpraOptionsFlow(config_entries.OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required(CONF_SSH_HOST, default=current.get(CONF_SSH_HOST, "")): str,
+                vol.Optional(CONF_SSH_HOST_VPN, default=current.get(CONF_SSH_HOST_VPN, "")): str,
                 vol.Required(CONF_SSH_PORT, default=current.get(CONF_SSH_PORT, 22)): int,
                 vol.Required(CONF_SSH_USER, default=current.get(CONF_SSH_USER, "")): str,
                 vol.Required(CONF_SSH_PASSWORD, default=current.get(CONF_SSH_PASSWORD, "")): str,
