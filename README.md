@@ -55,6 +55,7 @@ Copier le dossier `custom_components/timekpra/` dans le répertoire `config/cust
 2. Chercher **Timekpra**
 3. Remplir :
    - **Hôte SSH** : IP de la machine de l'enfant (ex: `192.168.1.50`)
+   - **Hôte SSH (VPN)** : *(optionnel)* IP quand l'enfant est connecté au VPN (ex: `10.0.0.2`)
    - **Port SSH** : `22` (par défaut)
    - **Utilisateur SSH** : compte avec accès sudo (ex: `parents`)
    - **Mot de passe SSH** : mot de passe du compte
@@ -97,6 +98,7 @@ La carte est installée automatiquement. Pour l'ajouter à un dashboard :
 ## Fonctionnement technique
 
 - Connexion SSH via `asyncssh` avec authentification par mot de passe
+- **Fallback VPN** : si l'IP locale est injoignable et une IP VPN est configurée, la connexion est tentée automatiquement sur l'IP VPN
 - Lecture de la config depuis `/var/lib/timekpr/config/timekpr.{user}.conf`
 - Écriture via la CLI `timekpra` (ex: `timekpra --settimelimits`)
 - Rafraîchissement toutes les 5 minutes (configurable)
