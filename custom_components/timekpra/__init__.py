@@ -7,6 +7,7 @@ from pathlib import Path
 
 import voluptuous as vol
 
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -43,19 +44,27 @@ def _get_version() -> str:
 
 
 async def _deploy_card(hass: HomeAssistant) -> None:
-    """Copy the JS card to www/ and register it as a Lovelace resource."""
+    """Copy the JS card to www/ and register it as a frontend module.
+
+    Copying to ``config/www`` exposes it at ``/local/<file>``; registering the
+    URL with the frontend makes the card load automatically (so it shows up in
+    the card picker) without the user adding a Lovelace resource manually.
+    """
     src = Path(__file__).parent / "www" / CARD_JS
     dst_dir = Path(hass.config.path("www"))
-    dst_dir.mkdir(exist_ok=True)
     dst = dst_dir / CARD_JS
+    version = _get_version()
 
     # Always copy — ensures updates are deployed after HACS upgrade
     try:
+        await hass.async_add_executor_job(dst_dir.mkdir, 0o777, True, True)
         await hass.async_add_executor_job(shutil.copy2, str(src), str(dst))
-        version = _get_version()
         _LOGGER.info("Timekpra card v%s deployed to %s", version, dst)
     except Exception:
         _LOGGER.warning("Could not copy card JS from %s to %s", src, dst)
+
+    # Register so the frontend loads it (version query busts the browser cache)
+    add_extra_js_url(hass, f"/local/{CARD_JS}?v={version}")
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
