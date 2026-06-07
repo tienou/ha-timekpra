@@ -77,7 +77,7 @@ class TimekpraDailyLimit(TimekpraEntity, NumberEntity):
         self._ssh = ssh
         self._day_index = day_index
         self._attr_unique_id = f"{entry.entry_id}_limit_{day['key']}"
-        self._attr_name = f"Limite {day['name']}"
+        self._attr_translation_key = f"limit_{day['key']}"
 
     @property
     def native_value(self) -> float | None:
@@ -111,7 +111,7 @@ class TimekpraWeeklyLimit(TimekpraEntity, NumberEntity):
         super().__init__(coordinator, target_user)
         self._ssh = ssh
         self._attr_unique_id = f"{entry.entry_id}_limit_week"
-        self._attr_name = "Limite hebdomadaire"
+        self._attr_translation_key = "limit_week"
 
     @property
     def native_value(self) -> float | None:
@@ -140,7 +140,7 @@ class TimekpraMonthlyLimit(TimekpraEntity, NumberEntity):
         super().__init__(coordinator, target_user)
         self._ssh = ssh
         self._attr_unique_id = f"{entry.entry_id}_limit_month"
-        self._attr_name = "Limite mensuelle"
+        self._attr_translation_key = "limit_month"
 
     @property
     def native_value(self) -> float | None:
@@ -169,7 +169,7 @@ class TimekpraHourStart(TimekpraEntity, NumberEntity):
         super().__init__(coordinator, target_user)
         self._ssh = ssh
         self._attr_unique_id = f"{entry.entry_id}_hour_start"
-        self._attr_name = "Heure de d\u00e9but"
+        self._attr_translation_key = "hour_start"
 
     @property
     def native_value(self) -> float | None:
@@ -200,7 +200,7 @@ class TimekpraMinuteStart(TimekpraEntity, NumberEntity):
         super().__init__(coordinator, target_user)
         self._ssh = ssh
         self._attr_unique_id = f"{entry.entry_id}_minute_start"
-        self._attr_name = "Minute de d\u00e9but"
+        self._attr_translation_key = "minute_start"
 
     @property
     def native_value(self) -> float | None:
@@ -231,7 +231,7 @@ class TimekpraHourEnd(TimekpraEntity, NumberEntity):
         super().__init__(coordinator, target_user)
         self._ssh = ssh
         self._attr_unique_id = f"{entry.entry_id}_hour_end"
-        self._attr_name = "Heure de fin"
+        self._attr_translation_key = "hour_end"
 
     @property
     def native_value(self) -> float | None:
@@ -262,7 +262,7 @@ class TimekpraMinuteEnd(TimekpraEntity, NumberEntity):
         super().__init__(coordinator, target_user)
         self._ssh = ssh
         self._attr_unique_id = f"{entry.entry_id}_minute_end"
-        self._attr_name = "Minute de fin"
+        self._attr_translation_key = "minute_end"
 
     @property
     def native_value(self) -> float | None:
@@ -295,7 +295,7 @@ class TimekpraNotificationThreshold(TimekpraEntity, NumberEntity):
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_notification_threshold"
-        self._attr_name = "Notification avant verrouillage"
+        self._attr_translation_key = "notification_threshold"
 
     @property
     def native_value(self) -> float | None:

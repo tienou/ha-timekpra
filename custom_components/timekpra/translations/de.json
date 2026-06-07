@@ -1,0 +1,140 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Timekpra SSH-Verbindung",
+        "description": "Richten Sie die SSH-Verbindung zum Remote-Rechner ein, auf dem Timekpra läuft.",
+        "data": {
+          "ssh_host": "SSH-Host",
+          "ssh_host_vpn": "SSH-Host (VPN)",
+          "ssh_port": "SSH-Port",
+          "ssh_user": "SSH-Benutzer",
+          "ssh_password": "SSH-Passwort",
+          "target_user": "Timekpra-Benutzer (Name des Kindes)"
+        },
+        "data_description": {
+          "ssh_host_vpn": "Optional: IP-Adresse bei VPN-Verbindung"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "SSH-Verbindung fehlgeschlagen. Überprüfen Sie Host, Port und Zugangsdaten."
+    },
+    "abort": {
+      "already_configured": "Dieser Benutzer ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Timekpra-Verbindung bearbeiten",
+        "data": {
+          "ssh_host": "SSH-Host",
+          "ssh_host_vpn": "SSH-Host (VPN)",
+          "ssh_port": "SSH-Port",
+          "ssh_user": "SSH-Benutzer",
+          "ssh_password": "SSH-Passwort",
+          "target_user": "Timekpra-Benutzer (Name des Kindes)"
+        },
+        "data_description": {
+          "ssh_host_vpn": "Optional: IP-Adresse bei VPN-Verbindung"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "time_spent_today": { "name": "Heute genutzte Zeit" },
+      "time_remaining": { "name": "Heute verbleibende Zeit" },
+      "time_spent_week": { "name": "Diese Woche genutzte Zeit" },
+      "computer": {
+        "name": "Computer",
+        "state": {
+          "online": "Online",
+          "offline": "Offline"
+        }
+      },
+      "pending": { "name": "Ausstehende Änderungen" }
+    },
+    "switch": {
+      "day_monday": { "name": "Erlaubter Tag - Montag" },
+      "day_tuesday": { "name": "Erlaubter Tag - Dienstag" },
+      "day_wednesday": { "name": "Erlaubter Tag - Mittwoch" },
+      "day_thursday": { "name": "Erlaubter Tag - Donnerstag" },
+      "day_friday": { "name": "Erlaubter Tag - Freitag" },
+      "day_saturday": { "name": "Erlaubter Tag - Samstag" },
+      "day_sunday": { "name": "Erlaubter Tag - Sonntag" },
+      "track_inactive": { "name": "Inaktive Zeit zählen" },
+      "daily_limit_enabled": { "name": "Tägliche Limits aktiv" },
+      "weekly_limit_enabled": { "name": "Wöchentliches Limit aktiv" },
+      "monthly_limit_enabled": { "name": "Monatliches Limit aktiv" },
+      "override": { "name": "Temporäre Freigabe" }
+    },
+    "number": {
+      "limit_monday": { "name": "Limit Montag" },
+      "limit_tuesday": { "name": "Limit Dienstag" },
+      "limit_wednesday": { "name": "Limit Mittwoch" },
+      "limit_thursday": { "name": "Limit Donnerstag" },
+      "limit_friday": { "name": "Limit Freitag" },
+      "limit_saturday": { "name": "Limit Samstag" },
+      "limit_sunday": { "name": "Limit Sonntag" },
+      "limit_week": { "name": "Wöchentliches Limit" },
+      "limit_month": { "name": "Monatliches Limit" },
+      "hour_start": { "name": "Startstunde" },
+      "minute_start": { "name": "Startminute" },
+      "hour_end": { "name": "Endstunde" },
+      "minute_end": { "name": "Endminute" },
+      "notification_threshold": { "name": "Hinweis vor Sperre" }
+    },
+    "select": {
+      "lockout_type": {
+        "name": "Aktion bei Zeitablauf",
+        "state": {
+          "lock": "Sperren",
+          "suspend": "Energiesparmodus",
+          "shutdown": "Herunterfahren"
+        }
+      },
+      "profile": {
+        "name": "Profil",
+        "state": {
+          "custom": "Benutzerdefiniert",
+          "override": "Temporäre Freigabe",
+          "school": "Schule",
+          "holidays": "Ferien",
+          "grandparents": "Bei Oma und Opa"
+        }
+      }
+    }
+  },
+  "services": {
+    "save_profile": {
+      "name": "Profil speichern",
+      "description": "Speichert die aktuellen Einstellungen in einem benannten Profil.",
+      "fields": {
+        "name": {
+          "name": "Profilname",
+          "description": "Name des zu speichernden Profils (z. B. Schule, Ferien)."
+        },
+        "entry_id": {
+          "name": "Eintrags-ID",
+          "description": "Konfigurationseintrags-ID (optional, wenn nur ein Gerät konfiguriert ist)."
+        }
+      }
+    },
+    "delete_profile": {
+      "name": "Profil löschen",
+      "description": "Löscht ein Benutzerprofil.",
+      "fields": {
+        "name": {
+          "name": "Profilname",
+          "description": "Name des zu löschenden Profils."
+        },
+        "entry_id": {
+          "name": "Eintrags-ID",
+          "description": "Konfigurationseintrags-ID (optional, wenn nur ein Gerät konfiguriert ist)."
+        }
+      }
+    }
+  }
+}

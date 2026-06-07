@@ -35,11 +35,14 @@ DEFAULT_MONTHLY_LIMIT = 40
 DEFAULT_NOTIFICATION_THRESHOLD = 15  # minutes avant verrouillage
 
 # ── Profils prédéfinis ─────────────────────────────────────────────
-PROFILE_CUSTOM = "Personnalisé"
-PROFILE_OVERRIDE = "Déblocage temporaire"
+# Profile ids are snake_case so they can be translated via select state
+# translations (entity.select.profile.state.<id>). Display labels live in
+# the translation files. Migration of legacy French ids: see coordinator.
+PROFILE_CUSTOM = "custom"
+PROFILE_OVERRIDE = "override"
 
 DEFAULT_PROFILES = {
-    "École": {
+    "school": {
         "allowed_days": [1, 2, 3, 4, 5, 6, 7],
         "hour_start": 8,
         "hour_end": 20,
@@ -51,7 +54,7 @@ DEFAULT_PROFILES = {
         "track_inactive": False,
         "lockout_type": "lock",
     },
-    "Vacances": {
+    "holidays": {
         "allowed_days": [1, 2, 3, 4, 5, 6, 7],
         "hour_start": 9,
         "hour_end": 21,
@@ -63,7 +66,7 @@ DEFAULT_PROFILES = {
         "track_inactive": False,
         "lockout_type": "lock",
     },
-    "Chez Papi Mamie": {
+    "grandparents": {
         "allowed_days": [1, 2, 3, 4, 5, 6, 7],
         "hour_start": 9,
         "hour_end": 20,
