@@ -38,12 +38,12 @@ class TimekpraLockoutType(TimekpraEntity, SelectEntity):
 
     _attr_icon = "mdi:lock"
     _attr_options = LOCKOUT_TYPES
+    _attr_translation_key = "lockout_type"
 
     def __init__(self, coordinator, ssh, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._ssh = ssh
         self._attr_unique_id = f"{entry.entry_id}_lockout_type"
-        self._attr_name = "Action fin de temps"
 
     @property
     def current_option(self) -> str | None:
@@ -56,14 +56,14 @@ class TimekpraLockoutType(TimekpraEntity, SelectEntity):
 
 
 class TimekpraProfileSelect(TimekpraEntity, SelectEntity):
-    """Select which profile to apply (École, Vacances, etc.)."""
+    """Select which profile to apply (school, holidays, etc.)."""
 
     _attr_icon = "mdi:account-switch"
+    _attr_translation_key = "profile"
 
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_profile"
-        self._attr_name = "Profil"
 
     @property
     def options(self) -> list[str]:

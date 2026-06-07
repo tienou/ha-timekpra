@@ -33,6 +33,17 @@ _LOGGER = logging.getLogger(__name__)
 
 STORAGE_VERSION = 2
 
+# Legacy (French) profile ids → new snake_case ids. Profile ids are now
+# snake_case so built-in profiles can be translated via select state
+# translations; this remaps any state persisted before that change.
+_LEGACY_PROFILE_IDS = {
+    "Personnalisé": "custom",
+    "Déblocage temporaire": "override",
+    "École": "school",
+    "Vacances": "holidays",
+    "Chez Papi Mamie": "grandparents",
+}
+
 _HOUR_RE = re.compile(r"^!?(\d+)(?:\[(\d+)-(\d+)\])?$")
 
 
@@ -107,6 +118,9 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._last_known_data:
                 _LOGGER.debug("Loaded last known config from storage")
 
+            if self._migrate_legacy_profile_ids():
+                await self._save_state()
+
         # Wire SSH host-key pinning (TOFU) — must run even on a fresh install
         # so the first connection's key gets persisted.
         self.ssh.set_host_key(self.saved_values.get("host_key", ""))
@@ -116,6 +130,43 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Persist the pinned SSH host key learned on first connect (TOFU)."""
         self.saved_values["host_key"] = key_str
         await self._save_state()
+
+    def _migrate_legacy_profile_ids(self) -> bool:
+        """Rewrite legacy French profile ids to snake_case. Returns True if changed."""
+        changed = False
+
+        active = self.saved_values.get("active_profile")
+        if active in _LEGACY_PROFILE_IDS:
+            self.saved_values["active_profile"] = _LEGACY_PROFILE_IDS[active]
+            changed = True
+
+        deleted = self.saved_values.get("deleted_profiles")
+        if isinstance(deleted, list):
+            migrated = [_LEGACY_PROFILE_IDS.get(name, name) for name in deleted]
+            if migrated != deleted:
+                self.saved_values["deleted_profiles"] = migrated
+                changed = True
+
+        # Rename any user-saved profile stored under a legacy default id.
+        profiles = self.saved_values.get("profiles")
+        if isinstance(profiles, dict):
+            for old_id, new_id in _LEGACY_PROFILE_IDS.items():
+                if old_id not in profiles:
+                    continue
+                snapshot = profiles.pop(old_id)
+                changed = True
+                # A user profile saved as "Personnalisé" / "Déblocage
+                # temporaire" would become the reserved "custom" / "override"
+                # id and show up twice in the select: keep it under its
+                # legacy name instead.
+                if new_id in (PROFILE_CUSTOM, PROFILE_OVERRIDE):
+                    profiles[f"{old_id} (1)"] = snapshot
+                elif new_id not in profiles:
+                    profiles[new_id] = snapshot
+
+        if changed:
+            _LOGGER.info("Migrated legacy profile ids to snake_case")
+        return changed
 
     async def _save_state(self) -> None:
         """Persist everything to disk."""
@@ -229,7 +280,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     @property
     def profile_names(self) -> list[str]:
-        """Ordered list: Personnalisé + sorted profiles + Déblocage temporaire."""
+        """Ordered list: custom + sorted profiles + override (ids, not labels)."""
         return [PROFILE_CUSTOM] + sorted(self.profiles.keys()) + [PROFILE_OVERRIDE]
 
     @property
@@ -260,7 +311,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.info("Saved profile: %s", name)
 
     async def async_delete_profile(self, name: str) -> None:
-        """Delete a profile (cannot delete override or Personnalisé)."""
+        """Delete a profile (cannot delete the override or custom profile)."""
         if name in (PROFILE_OVERRIDE, PROFILE_CUSTOM):
             _LOGGER.warning("Cannot delete built-in profile: %s", name)
             return
@@ -361,7 +412,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.saved_values["active_profile"] = name
 
         if name == PROFILE_OVERRIDE:
-            # ── Déblocage temporaire: save current state, set everything unlimited
+            # ── override: save current state, set everything unlimited
             self.saved_values["override_active"] = True
             self.saved_values["override_hours"] = {
                 "hour_start": data.get("hour_start", 0),

@@ -25,5 +25,5 @@ class TimekpraEntity(CoordinatorEntity[TimekpraCoordinator]):
             identifiers={(DOMAIN, self._target_user)},
             name=f"Timekpra {self._target_user.capitalize()}",
             manufacturer="Timekpr-nExT",
-            model="Contr\u00f4le Parental",
+            model="Parental Control",
         )
