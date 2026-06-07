@@ -1,92 +1,92 @@
 type: vertical-stack
 cards:
-  # ── Statut ────────────────────────────────────────────────────
+  # ── Status ────────────────────────────────────────────────────
   - type: entities
-    title: "Contr\u00f4le Parental - Camille"
+    title: "Parental Control - Camille"
     icon: mdi:shield-account
     entities:
-      - entity: sensor.timekpra_camille_ordinateur
-        name: "Ordinateur"
-      - entity: sensor.timekpra_camille_modifications_en_attente
-        name: "Modifications en attente"
-      - entity: sensor.timekpra_camille_temps_utilise_aujourd_hui
-        name: "Temps utilis\u00e9 aujourd'hui"
-      - entity: sensor.timekpra_camille_temps_utilise_cette_semaine
-        name: "Temps utilis\u00e9 cette semaine"
+      - entity: sensor.timekpra_camille_computer
+        name: "Computer"
+      - entity: sensor.timekpra_camille_pending_changes
+        name: "Pending changes"
+      - entity: sensor.timekpra_camille_time_used_today
+        name: "Time used today"
+      - entity: sensor.timekpra_camille_time_used_this_week
+        name: "Time used this week"
 
-  # ── Jours autoris\u00e9s ──────────────────────────────────────────
+  # ── Allowed days ──────────────────────────────────────────────
   - type: entities
-    title: "Jours autoris\u00e9s"
+    title: "Allowed days"
     icon: mdi:calendar
     show_header_toggle: false
     entities:
-      - entity: switch.timekpra_camille_jour_autorise_lundi
-        name: "Lundi"
-      - entity: switch.timekpra_camille_jour_autorise_mardi
-        name: "Mardi"
-      - entity: switch.timekpra_camille_jour_autorise_mercredi
-        name: "Mercredi"
-      - entity: switch.timekpra_camille_jour_autorise_jeudi
-        name: "Jeudi"
-      - entity: switch.timekpra_camille_jour_autorise_vendredi
-        name: "Vendredi"
-      - entity: switch.timekpra_camille_jour_autorise_samedi
-        name: "Samedi"
-      - entity: switch.timekpra_camille_jour_autorise_dimanche
-        name: "Dimanche"
+      - entity: switch.timekpra_camille_allowed_day_monday
+        name: "Monday"
+      - entity: switch.timekpra_camille_allowed_day_tuesday
+        name: "Tuesday"
+      - entity: switch.timekpra_camille_allowed_day_wednesday
+        name: "Wednesday"
+      - entity: switch.timekpra_camille_allowed_day_thursday
+        name: "Thursday"
+      - entity: switch.timekpra_camille_allowed_day_friday
+        name: "Friday"
+      - entity: switch.timekpra_camille_allowed_day_saturday
+        name: "Saturday"
+      - entity: switch.timekpra_camille_allowed_day_sunday
+        name: "Sunday"
 
-  # ── Horaires ─────────────────────────────────────────────────
+  # ── Time range ────────────────────────────────────────────────
   - type: entities
-    title: "Plage horaire"
+    title: "Time range"
     icon: mdi:clock-outline
     entities:
-      - entity: number.timekpra_camille_heure_de_debut
-        name: "Heure de d\u00e9but"
-      - entity: number.timekpra_camille_heure_de_fin
-        name: "Heure de fin"
+      - entity: number.timekpra_camille_start_hour
+        name: "Start hour"
+      - entity: number.timekpra_camille_end_hour
+        name: "End hour"
 
-  # ── Limites quotidiennes ─────────────────────────────────────
+  # ── Daily limits ──────────────────────────────────────────────
   - type: entities
-    title: "Limites quotidiennes"
+    title: "Daily limits"
     icon: mdi:timer-outline
     entities:
-      - entity: switch.timekpra_camille_limites_quotidiennes_actives
-        name: "Activer les limites quotidiennes"
-      - entity: number.timekpra_camille_limite_lundi
-        name: "Lundi"
-      - entity: number.timekpra_camille_limite_mardi
-        name: "Mardi"
-      - entity: number.timekpra_camille_limite_mercredi
-        name: "Mercredi"
-      - entity: number.timekpra_camille_limite_jeudi
-        name: "Jeudi"
-      - entity: number.timekpra_camille_limite_vendredi
-        name: "Vendredi"
-      - entity: number.timekpra_camille_limite_samedi
-        name: "Samedi"
-      - entity: number.timekpra_camille_limite_dimanche
-        name: "Dimanche"
+      - entity: switch.timekpra_camille_daily_limits_enabled
+        name: "Enable daily limits"
+      - entity: number.timekpra_camille_monday_limit
+        name: "Monday"
+      - entity: number.timekpra_camille_tuesday_limit
+        name: "Tuesday"
+      - entity: number.timekpra_camille_wednesday_limit
+        name: "Wednesday"
+      - entity: number.timekpra_camille_thursday_limit
+        name: "Thursday"
+      - entity: number.timekpra_camille_friday_limit
+        name: "Friday"
+      - entity: number.timekpra_camille_saturday_limit
+        name: "Saturday"
+      - entity: number.timekpra_camille_sunday_limit
+        name: "Sunday"
 
-  # ── Limites globales ─────────────────────────────────────────
+  # ── Global limits ─────────────────────────────────────────────
   - type: entities
-    title: "Limites globales"
+    title: "Global limits"
     icon: mdi:calendar-clock
     entities:
-      - entity: switch.timekpra_camille_limite_hebdomadaire_active
-        name: "Activer la limite hebdomadaire"
-      - entity: number.timekpra_camille_limite_hebdomadaire
-        name: "Limite hebdomadaire"
-      - entity: switch.timekpra_camille_limite_mensuelle_active
-        name: "Activer la limite mensuelle"
-      - entity: number.timekpra_camille_limite_mensuelle
-        name: "Limite mensuelle"
+      - entity: switch.timekpra_camille_weekly_limit_enabled
+        name: "Enable weekly limit"
+      - entity: number.timekpra_camille_weekly_limit
+        name: "Weekly limit"
+      - entity: switch.timekpra_camille_monthly_limit_enabled
+        name: "Enable monthly limit"
+      - entity: number.timekpra_camille_monthly_limit
+        name: "Monthly limit"
 
-  # ── R\u00e9glages ────────────────────────────────────────────────
+  # ── Settings ──────────────────────────────────────────────────
   - type: entities
-    title: "R\u00e9glages"
+    title: "Settings"
     icon: mdi:cog
     entities:
-      - entity: select.timekpra_camille_action_fin_de_temps
-        name: "Action fin de temps"
-      - entity: switch.timekpra_camille_compter_le_temps_inactif
-        name: "Compter le temps inactif"
+      - entity: select.timekpra_camille_action_when_time_runs_out
+        name: "Action when time runs out"
+      - entity: switch.timekpra_camille_count_idle_time
+        name: "Count idle time"

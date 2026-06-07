@@ -3,25 +3,25 @@
     "step": {
       "user": {
         "title": "Connexion SSH Timekpra",
-        "description": "Configurez la connexion SSH vers la machine distante ex\u00e9cutant Timekpra.",
+        "description": "Configurez la connexion SSH vers la machine distante exécutant Timekpra.",
         "data": {
-          "ssh_host": "H\u00f4te SSH",
-          "ssh_host_vpn": "H\u00f4te SSH (VPN)",
+          "ssh_host": "Hôte SSH",
+          "ssh_host_vpn": "Hôte SSH (VPN)",
           "ssh_port": "Port SSH",
           "ssh_user": "Utilisateur SSH",
           "ssh_password": "Mot de passe SSH",
           "target_user": "Utilisateur Timekpra (nom de l'enfant)"
         },
         "data_description": {
-          "ssh_host_vpn": "Optionnel : adresse IP quand connect\u00e9 au VPN"
+          "ssh_host_vpn": "Optionnel : adresse IP quand connecté au VPN"
         }
       }
     },
     "error": {
-      "cannot_connect": "Impossible de se connecter en SSH. V\u00e9rifiez l'h\u00f4te, le port et les identifiants."
+      "cannot_connect": "Impossible de se connecter en SSH. Vérifiez l'hôte, le port et les identifiants."
     },
     "abort": {
-      "already_configured": "Cet utilisateur est d\u00e9j\u00e0 configur\u00e9."
+      "already_configured": "Cet utilisateur est déjà configuré."
     }
   },
   "options": {
@@ -29,15 +29,110 @@
       "init": {
         "title": "Modifier la connexion Timekpra",
         "data": {
-          "ssh_host": "H\u00f4te SSH",
-          "ssh_host_vpn": "H\u00f4te SSH (VPN)",
+          "ssh_host": "Hôte SSH",
+          "ssh_host_vpn": "Hôte SSH (VPN)",
           "ssh_port": "Port SSH",
           "ssh_user": "Utilisateur SSH",
           "ssh_password": "Mot de passe SSH",
           "target_user": "Utilisateur Timekpra (nom de l'enfant)"
         },
         "data_description": {
-          "ssh_host_vpn": "Optionnel : adresse IP quand connect\u00e9 au VPN"
+          "ssh_host_vpn": "Optionnel : adresse IP quand connecté au VPN"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "time_spent_today": { "name": "Temps utilisé aujourd'hui" },
+      "time_remaining": { "name": "Temps restant aujourd'hui" },
+      "time_spent_week": { "name": "Temps utilisé cette semaine" },
+      "computer": {
+        "name": "Ordinateur",
+        "state": {
+          "online": "En ligne",
+          "offline": "Hors ligne"
+        }
+      },
+      "pending": { "name": "Modifications en attente" }
+    },
+    "switch": {
+      "day_monday": { "name": "Jour autorisé - Lundi" },
+      "day_tuesday": { "name": "Jour autorisé - Mardi" },
+      "day_wednesday": { "name": "Jour autorisé - Mercredi" },
+      "day_thursday": { "name": "Jour autorisé - Jeudi" },
+      "day_friday": { "name": "Jour autorisé - Vendredi" },
+      "day_saturday": { "name": "Jour autorisé - Samedi" },
+      "day_sunday": { "name": "Jour autorisé - Dimanche" },
+      "track_inactive": { "name": "Compter le temps inactif" },
+      "daily_limit_enabled": { "name": "Limites quotidiennes actives" },
+      "weekly_limit_enabled": { "name": "Limite hebdomadaire active" },
+      "monthly_limit_enabled": { "name": "Limite mensuelle active" },
+      "override": { "name": "Déblocage temporaire" }
+    },
+    "number": {
+      "limit_monday": { "name": "Limite Lundi" },
+      "limit_tuesday": { "name": "Limite Mardi" },
+      "limit_wednesday": { "name": "Limite Mercredi" },
+      "limit_thursday": { "name": "Limite Jeudi" },
+      "limit_friday": { "name": "Limite Vendredi" },
+      "limit_saturday": { "name": "Limite Samedi" },
+      "limit_sunday": { "name": "Limite Dimanche" },
+      "limit_week": { "name": "Limite hebdomadaire" },
+      "limit_month": { "name": "Limite mensuelle" },
+      "hour_start": { "name": "Heure de début" },
+      "minute_start": { "name": "Minute de début" },
+      "hour_end": { "name": "Heure de fin" },
+      "minute_end": { "name": "Minute de fin" },
+      "notification_threshold": { "name": "Notification avant verrouillage" }
+    },
+    "select": {
+      "lockout_type": {
+        "name": "Action fin de temps",
+        "state": {
+          "lock": "Verrouiller",
+          "suspend": "Mettre en veille",
+          "shutdown": "Éteindre"
+        }
+      },
+      "profile": {
+        "name": "Profil",
+        "state": {
+          "custom": "Personnalisé",
+          "override": "Déblocage temporaire",
+          "school": "École",
+          "holidays": "Vacances",
+          "grandparents": "Chez Papi Mamie"
+        }
+      }
+    }
+  },
+  "services": {
+    "save_profile": {
+      "name": "Sauvegarder un profil",
+      "description": "Sauvegarde les réglages actuels dans un profil nommé.",
+      "fields": {
+        "name": {
+          "name": "Nom du profil",
+          "description": "Nom du profil à sauvegarder (ex. École, Vacances)."
+        },
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "ID de l'entrée de configuration (optionnel si un seul appareil)."
+        }
+      }
+    },
+    "delete_profile": {
+      "name": "Supprimer un profil",
+      "description": "Supprime un profil utilisateur.",
+      "fields": {
+        "name": {
+          "name": "Nom du profil",
+          "description": "Nom du profil à supprimer."
+        },
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "ID de l'entrée de configuration (optionnel si un seul appareil)."
         }
       }
     }

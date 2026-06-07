@@ -1,6 +1,6 @@
 {
   "domain": "timekpra",
-  "name": "Timekpra - Contr\u00f4le Parental",
+  "name": "Timekpra - Parental Control",
   "codeowners": [],
   "config_flow": true,
   "dependencies": [],
