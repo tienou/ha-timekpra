@@ -12,6 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 import homeassistant.helpers.config_validation as cv
+from homeassistant.loader import async_get_integration
 
 from .const import (
     CONF_SSH_HOST,
@@ -32,17 +33,6 @@ PLATFORMS = [Platform.NUMBER, Platform.SWITCH, Platform.SELECT, Platform.SENSOR]
 CARD_JS = "timekpra-card.js"
 
 
-def _get_version() -> str:
-    """Read version from manifest.json for cache-busting."""
-    import json
-
-    manifest = Path(__file__).parent / "manifest.json"
-    try:
-        return json.loads(manifest.read_text()).get("version", "0")
-    except Exception:
-        return "0"
-
-
 async def _deploy_card(hass: HomeAssistant) -> None:
     """Copy the JS card to www/ and register it as a frontend module.
 
@@ -53,7 +43,8 @@ async def _deploy_card(hass: HomeAssistant) -> None:
     src = Path(__file__).parent / "www" / CARD_JS
     dst_dir = Path(hass.config.path("www"))
     dst = dst_dir / CARD_JS
-    version = _get_version()
+    integration = await async_get_integration(hass, DOMAIN)
+    version = str(integration.version or "0")
 
     # Always copy — ensures updates are deployed after HACS upgrade
     try:
