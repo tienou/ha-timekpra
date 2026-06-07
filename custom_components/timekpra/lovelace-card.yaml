@@ -2,7 +2,7 @@ type: vertical-stack
 cards:
   # ── Statut ────────────────────────────────────────────────────
   - type: entities
-    title: "Contr\u00f4le Parental - Camille"
+    title: "Parental Control - Camille"
     icon: mdi:shield-account
     entities:
       - entity: sensor.timekpra_camille_ordinateur

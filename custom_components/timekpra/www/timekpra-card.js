@@ -184,7 +184,7 @@ class TimekpraCard extends HTMLElement {
     const notifThreshold = this._stateValue(notifThresholdEid);
 
     const user = this.config.target_user;
-    const title = this.config.title || `Contrôle Parental - ${user.charAt(0).toUpperCase() + user.slice(1)}`;
+    const title = this.config.title || `Parental Control - ${user.charAt(0).toUpperCase() + user.slice(1)}`;
 
     // Build day toggles
     let dayTogglesHtml = days.map((d) => {
@@ -739,7 +739,7 @@ class TimekpraCardEditor extends HTMLElement {
           <input type="text" id="title"
             value="${this._config.title || ""}"
             style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box;"
-            placeholder="Contrôle Parental - Camille">
+            placeholder="Parental Control - Camille">
         </div>
       </div>
     `;
@@ -774,8 +774,8 @@ window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === "timekpra-card")) {
   window.customCards.push({
     type: "timekpra-card",
-    name: "Timekpra - Contrôle Parental",
-    description: "Carte de gestion du contrôle parental Timekpr-nExT",
+    name: "Timekpra - Parental Control",
+    description: "Timekpr-nExT parental control management card",
     preview: true,
     documentationURL: "https://github.com/tienou/ha-timekpra",
   });
