@@ -9,16 +9,28 @@
           "ssh_host_vpn": "SSH Host (VPN)",
           "ssh_port": "SSH Port",
           "ssh_user": "SSH Username",
+          "auth_method": "Authentication method",
           "ssh_password": "SSH Password",
+          "ssh_key": "SSH private key",
+          "ssh_key_passphrase": "Private key passphrase",
+          "sudo_password": "sudo Password",
           "target_user": "Timekpra user (child's login name)"
         },
         "data_description": {
-          "ssh_host_vpn": "Optional: IP address when connected via VPN"
+          "ssh_host_vpn": "Optional: IP address when connected via VPN",
+          "auth_method": "Choose how to authenticate: SSH password or private key.",
+          "ssh_password": "Required when using password authentication. Also used for sudo.",
+          "ssh_key": "Paste the full private key (PEM/OpenSSH). Required when using key authentication.",
+          "ssh_key_passphrase": "Optional: passphrase protecting the private key.",
+          "sudo_password": "Optional. Password for sudo on the remote machine. Leave empty if sudo is configured with NOPASSWD (typical with key authentication)."
         }
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect via SSH. Please check host, port, and credentials."
+      "cannot_connect": "Cannot connect via SSH. Please check host, port, and credentials.",
+      "password_required": "A password is required for password authentication.",
+      "key_required": "A private key is required for key authentication.",
+      "invalid_key": "The private key could not be read. Check its format and passphrase."
     },
     "abort": {
       "already_configured": "This user is already configured."
@@ -33,13 +45,28 @@
           "ssh_host_vpn": "SSH Host (VPN)",
           "ssh_port": "SSH Port",
           "ssh_user": "SSH Username",
+          "auth_method": "Authentication method",
           "ssh_password": "SSH Password",
+          "ssh_key": "SSH private key",
+          "ssh_key_passphrase": "Private key passphrase",
+          "sudo_password": "sudo Password",
           "target_user": "Timekpra user (child's login name)"
         },
         "data_description": {
-          "ssh_host_vpn": "Optional: IP address when connected via VPN"
+          "ssh_host_vpn": "Optional: IP address when connected via VPN",
+          "auth_method": "Choose how to authenticate: SSH password or private key.",
+          "ssh_password": "Required when using password authentication. Also used for sudo.",
+          "ssh_key": "Paste the full private key (PEM/OpenSSH). Required when using key authentication.",
+          "ssh_key_passphrase": "Optional: passphrase protecting the private key.",
+          "sudo_password": "Optional. Password for sudo on the remote machine. Leave empty if sudo is configured with NOPASSWD (typical with key authentication)."
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect via SSH. Please check host, port, and credentials.",
+      "password_required": "A password is required for password authentication.",
+      "key_required": "A private key is required for key authentication.",
+      "invalid_key": "The private key could not be read. Check its format and passphrase."
     }
   }
 }

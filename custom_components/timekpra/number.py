@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.components.number import (
+    NumberDeviceClass,
+    NumberEntity,
+    NumberMode,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -60,7 +64,8 @@ class TimekpraDailyLimit(TimekpraEntity, NumberEntity):
     _attr_native_min_value = 0
     _attr_native_max_value = 1440
     _attr_native_step = 15
-    _attr_mode = NumberMode.SLIDER
+    _attr_mode = NumberMode.BOX
+    _attr_device_class = NumberDeviceClass.DURATION
     _attr_native_unit_of_measurement = "min"
     _attr_icon = "mdi:timer-outline"
 
@@ -104,6 +109,7 @@ class TimekpraWeeklyLimit(TimekpraEntity, NumberEntity):
     _attr_native_max_value = 168
     _attr_native_step = 1
     _attr_mode = NumberMode.BOX
+    _attr_device_class = NumberDeviceClass.DURATION
     _attr_native_unit_of_measurement = "h"
     _attr_icon = "mdi:calendar-week"
 
@@ -133,6 +139,7 @@ class TimekpraMonthlyLimit(TimekpraEntity, NumberEntity):
     _attr_native_max_value = 744
     _attr_native_step = 1
     _attr_mode = NumberMode.BOX
+    _attr_device_class = NumberDeviceClass.DURATION
     _attr_native_unit_of_measurement = "h"
     _attr_icon = "mdi:calendar-month"
 
@@ -289,6 +296,7 @@ class TimekpraNotificationThreshold(TimekpraEntity, NumberEntity):
     _attr_native_max_value = 60
     _attr_native_step = 5
     _attr_mode = NumberMode.BOX
+    _attr_device_class = NumberDeviceClass.DURATION
     _attr_native_unit_of_measurement = "min"
     _attr_icon = "mdi:bell-ring-outline"
 

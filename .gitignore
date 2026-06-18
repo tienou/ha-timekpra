@@ -9,3 +9,6 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+
+# Local Claude Code settings (machine-specific, not part of the integration)
+.claude/

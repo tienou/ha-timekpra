@@ -7,7 +7,15 @@ CONF_SSH_HOST_VPN = "ssh_host_vpn"
 CONF_SSH_PORT = "ssh_port"
 CONF_SSH_USER = "ssh_user"
 CONF_SSH_PASSWORD = "ssh_password"
+CONF_AUTH_METHOD = "auth_method"
+CONF_SSH_KEY = "ssh_key"
+CONF_SSH_KEY_PASSPHRASE = "ssh_key_passphrase"
+CONF_SUDO_PASSWORD = "sudo_password"
 CONF_TARGET_USER = "target_user"
+
+# Authentication methods (value stored in the config entry)
+AUTH_PASSWORD = "password"
+AUTH_KEY = "key"
 
 SCAN_INTERVAL_SECONDS = 300
 

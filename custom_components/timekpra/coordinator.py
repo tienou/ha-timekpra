@@ -23,7 +23,7 @@ from .const import (
     UNLIMITED_MONTHLY,
     UNLIMITED_WEEKLY,
 )
-from .ssh import TimekpraSSH
+from .ssh import TimekpraCommandError, TimekpraSSH
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -84,20 +84,28 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_load_pending(self) -> None:
         """Load state from disk: pending commands, saved values, last data."""
         raw = await self._store.async_load()
-        if not isinstance(raw, dict):
-            return
+        if isinstance(raw, dict):
+            self._pending = raw.get("pending", {})
+            self.saved_values = raw.get("saved_values", {})
+            self._last_known_data = raw.get("last_known_data")
 
-        self._pending = raw.get("pending", {})
-        self.saved_values = raw.get("saved_values", {})
-        self._last_known_data = raw.get("last_known_data")
+            if self._pending:
+                _LOGGER.info(
+                    "Loaded %d pending command(s) from storage",
+                    len(self._pending),
+                )
+            if self._last_known_data:
+                _LOGGER.debug("Loaded last known config from storage")
 
-        if self._pending:
-            _LOGGER.info(
-                "Loaded %d pending command(s) from storage",
-                len(self._pending),
-            )
-        if self._last_known_data:
-            _LOGGER.debug("Loaded last known config from storage")
+        # Wire SSH host-key pinning (TOFU) — must run even on a fresh install
+        # so the first connection's key gets persisted.
+        self.ssh.set_host_key(self.saved_values.get("host_key", ""))
+        self.ssh.host_key_saver = self._save_host_key
+
+    async def _save_host_key(self, key_str: str) -> None:
+        """Persist the pinned SSH host key learned on first connect (TOFU)."""
+        self.saved_values["host_key"] = key_str
+        await self._save_state()
 
     async def _save_state(self) -> None:
         """Persist everything to disk."""
@@ -120,6 +128,16 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if method in self._pending:
                 del self._pending[method]
                 await self._save_state()
+        except TimekpraCommandError as err:
+            # Reached the machine but the command failed (wrong sudo password,
+            # missing NOPASSWD rule, or a timekpra error). Never treat this as
+            # success: keep it queued so the "pending" sensor flags that the
+            # change did NOT take effect, and surface the reason in the log.
+            _LOGGER.error("Command %s failed on the machine: %s", method, err)
+            self._pending[method] = full_args
+            if self.data:
+                self._last_known_data = dict(self.data)
+            await self._save_state()
         except (OSError, asyncssh.Error):
             _LOGGER.info("Machine offline - queuing %s for later", method)
             self._pending[method] = full_args
@@ -147,6 +165,11 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except (OSError, asyncssh.Error):
                 _LOGGER.debug("Still offline, stopping flush")
                 break
+            except TimekpraCommandError as err:
+                _LOGGER.error(
+                    "Queued command %s still failing, dropping it: %s", method, err
+                )
+                flushed.append(method)
             except Exception:
                 _LOGGER.warning("Dropping bad queued command: %s", method)
                 flushed.append(method)
@@ -237,11 +260,73 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.async_update_listeners()
         _LOGGER.info("Deleted profile: %s", name)
 
+    def _consume_override_snapshot(self) -> dict[str, Any]:
+        """Pop the pre-override settings to restore when the override ends.
+
+        A missing key means that setting was already unlimited before the
+        override, so it is intentionally left as-is (still unlimited).
+        """
+        restore: dict[str, Any] = {}
+        hours = self.saved_values.pop("override_hours", None)
+        if hours:
+            restore["hour_start"] = hours.get("hour_start", 0)
+            restore["hour_end"] = hours.get("hour_end", 23)
+            restore["minute_start"] = hours.get("minute_start", 0)
+            restore["minute_end"] = hours.get("minute_end", 59)
+        daily = self.saved_values.pop("override_daily", None)
+        if daily is not None:
+            restore["daily_limits"] = list(daily)
+        weekly = self.saved_values.pop("override_weekly", None)
+        if weekly is not None:
+            restore["weekly_limit"] = weekly
+        monthly = self.saved_values.pop("override_monthly", None)
+        if monthly is not None:
+            restore["monthly_limit"] = monthly
+        return restore
+
+    async def _push_restore(self, data: dict[str, Any]) -> None:
+        """Re-apply restored settings to timekpra after an override ends."""
+        await self.async_apply(
+            "set_allowed_hours",
+            data.get("hour_start", 0),
+            data.get("hour_end", 23),
+            data.get("minute_start", 0),
+            data.get("minute_end", 59),
+        )
+        await self.async_apply(
+            "set_time_limits", list(data.get("daily_limits", [60] * 7))
+        )
+        await self.async_apply("set_time_limit_week", data.get("weekly_limit", 0))
+        await self.async_apply("set_time_limit_month", data.get("monthly_limit", 0))
+        # The override had granted a full day (set_time_left = 86400). Clamp
+        # today's remaining time back to the restored daily limit so the
+        # machine is re-enforced now instead of staying unlocked until midnight.
+        daily = data.get("daily_limits", [])
+        today = datetime.now().weekday()
+        if today < len(daily):
+            await self.async_apply("set_time_left", "=", int(daily[today]) * 60)
+
     async def async_apply_profile(self, name: str) -> None:
         """Load a profile and apply all its settings to timekpra."""
         if name == PROFILE_CUSTOM:
             self.saved_values["active_profile"] = PROFILE_CUSTOM
             self.saved_values["override_active"] = False
+
+            # If a temporary override was active, restore the settings saved
+            # before it. Without this, turning the override OFF would silently
+            # leave the machine unrestricted (issue #1).
+            restore = self._consume_override_snapshot() if self.data else {}
+            if restore:
+                data = self.data
+                for key, val in restore.items():
+                    data[key] = list(val) if isinstance(val, list) else val
+                await self._save_state()
+                # Update the UI immediately, push to the machine in background.
+                self.async_set_updated_data(data)
+                self.hass.async_create_task(self._push_restore(dict(data)))
+                _LOGGER.info("Override OFF — restored previous limits")
+                return
+
             await self._save_state()
             # Use async_set_updated_data to atomically set data + notify
             # (avoids race with periodic _async_update_data replacing self.data)

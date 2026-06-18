@@ -3,25 +3,37 @@
     "step": {
       "user": {
         "title": "Connexion SSH Timekpra",
-        "description": "Configurez la connexion SSH vers la machine distante ex\u00e9cutant Timekpra.",
+        "description": "Configurez la connexion SSH vers la machine distante exécutant Timekpra.",
         "data": {
-          "ssh_host": "H\u00f4te SSH",
-          "ssh_host_vpn": "H\u00f4te SSH (VPN)",
+          "ssh_host": "Hôte SSH",
+          "ssh_host_vpn": "Hôte SSH (VPN)",
           "ssh_port": "Port SSH",
           "ssh_user": "Utilisateur SSH",
+          "auth_method": "Méthode d'authentification",
           "ssh_password": "Mot de passe SSH",
+          "ssh_key": "Clé privée SSH",
+          "ssh_key_passphrase": "Phrase secrète de la clé",
+          "sudo_password": "Mot de passe sudo",
           "target_user": "Utilisateur Timekpra (nom de l'enfant)"
         },
         "data_description": {
-          "ssh_host_vpn": "Optionnel : adresse IP quand connect\u00e9 au VPN"
+          "ssh_host_vpn": "Optionnel : adresse IP quand connecté au VPN",
+          "auth_method": "Choisissez l'authentification : mot de passe SSH ou clé privée.",
+          "ssh_password": "Requis pour l'authentification par mot de passe. Sert aussi pour sudo.",
+          "ssh_key": "Collez la clé privée complète (PEM/OpenSSH). Requise pour l'authentification par clé.",
+          "ssh_key_passphrase": "Optionnel : phrase secrète protégeant la clé privée.",
+          "sudo_password": "Optionnel. Mot de passe pour sudo sur la machine distante. Laissez vide si sudo est configuré en NOPASSWD (cas typique avec une clé)."
         }
       }
     },
     "error": {
-      "cannot_connect": "Impossible de se connecter en SSH. V\u00e9rifiez l'h\u00f4te, le port et les identifiants."
+      "cannot_connect": "Impossible de se connecter en SSH. Vérifiez l'hôte, le port et les identifiants.",
+      "password_required": "Un mot de passe est requis pour l'authentification par mot de passe.",
+      "key_required": "Une clé privée est requise pour l'authentification par clé.",
+      "invalid_key": "Impossible de lire la clé privée. Vérifiez son format et sa phrase secrète."
     },
     "abort": {
-      "already_configured": "Cet utilisateur est d\u00e9j\u00e0 configur\u00e9."
+      "already_configured": "Cet utilisateur est déjà configuré."
     }
   },
   "options": {
@@ -29,17 +41,32 @@
       "init": {
         "title": "Modifier la connexion Timekpra",
         "data": {
-          "ssh_host": "H\u00f4te SSH",
-          "ssh_host_vpn": "H\u00f4te SSH (VPN)",
+          "ssh_host": "Hôte SSH",
+          "ssh_host_vpn": "Hôte SSH (VPN)",
           "ssh_port": "Port SSH",
           "ssh_user": "Utilisateur SSH",
+          "auth_method": "Méthode d'authentification",
           "ssh_password": "Mot de passe SSH",
+          "ssh_key": "Clé privée SSH",
+          "ssh_key_passphrase": "Phrase secrète de la clé",
+          "sudo_password": "Mot de passe sudo",
           "target_user": "Utilisateur Timekpra (nom de l'enfant)"
         },
         "data_description": {
-          "ssh_host_vpn": "Optionnel : adresse IP quand connect\u00e9 au VPN"
+          "ssh_host_vpn": "Optionnel : adresse IP quand connecté au VPN",
+          "auth_method": "Choisissez l'authentification : mot de passe SSH ou clé privée.",
+          "ssh_password": "Requis pour l'authentification par mot de passe. Sert aussi pour sudo.",
+          "ssh_key": "Collez la clé privée complète (PEM/OpenSSH). Requise pour l'authentification par clé.",
+          "ssh_key_passphrase": "Optionnel : phrase secrète protégeant la clé privée.",
+          "sudo_password": "Optionnel. Mot de passe pour sudo sur la machine distante. Laissez vide si sudo est configuré en NOPASSWD (cas typique avec une clé)."
         }
       }
+    },
+    "error": {
+      "cannot_connect": "Impossible de se connecter en SSH. Vérifiez l'hôte, le port et les identifiants.",
+      "password_required": "Un mot de passe est requis pour l'authentification par mot de passe.",
+      "key_required": "Une clé privée est requise pour l'authentification par clé.",
+      "invalid_key": "Impossible de lire la clé privée. Vérifiez son format et sa phrase secrète."
     }
   }
 }

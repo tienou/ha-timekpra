@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, LOCKOUT_TYPES, PROFILE_CUSTOM
+from .const import DOMAIN, LOCKOUT_TYPES
 from .coordinator import TimekpraCoordinator
 from .entity import TimekpraEntity
 from .ssh import TimekpraSSH

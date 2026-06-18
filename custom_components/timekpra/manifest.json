@@ -1,11 +1,12 @@
 {
   "domain": "timekpra",
   "name": "Timekpra - Contr\u00f4le Parental",
-  "codeowners": [],
+  "codeowners": ["@tienou"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "",
+  "documentation": "https://github.com/tienou/ha-timekpra",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/tienou/ha-timekpra/issues",
   "requirements": ["asyncssh==2.17.0"],
-  "version": "1.18.2"
+  "version": "1.19.0"
 }

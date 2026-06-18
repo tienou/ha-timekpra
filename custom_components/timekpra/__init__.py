@@ -15,9 +15,12 @@ import homeassistant.helpers.config_validation as cv
 from .const import (
     CONF_SSH_HOST,
     CONF_SSH_HOST_VPN,
+    CONF_SSH_KEY,
+    CONF_SSH_KEY_PASSPHRASE,
     CONF_SSH_PASSWORD,
     CONF_SSH_PORT,
     CONF_SSH_USER,
+    CONF_SUDO_PASSWORD,
     CONF_TARGET_USER,
     DOMAIN,
 )
@@ -71,8 +74,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         host=entry.data[CONF_SSH_HOST],
         port=entry.data[CONF_SSH_PORT],
         username=entry.data[CONF_SSH_USER],
-        password=entry.data[CONF_SSH_PASSWORD],
+        password=entry.data.get(CONF_SSH_PASSWORD, ""),
         host_vpn=entry.data.get(CONF_SSH_HOST_VPN, ""),
+        ssh_key=entry.data.get(CONF_SSH_KEY, ""),
+        ssh_key_passphrase=entry.data.get(CONF_SSH_KEY_PASSPHRASE, ""),
+        sudo_password=entry.data.get(CONF_SUDO_PASSWORD, ""),
     )
 
     coordinator = TimekpraCoordinator(
