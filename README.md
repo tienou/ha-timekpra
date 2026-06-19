@@ -102,11 +102,30 @@ Pour changer les identifiants SSH (ou basculer entre mot de passe et clé) aprè
 
 ## Carte Lovelace
 
-La carte est installée automatiquement. Pour l'ajouter à un dashboard :
+La carte est **chargée automatiquement** par l'intégration (servie via `/timekpra/timekpra-card.js` et enregistrée comme module frontend) — **aucune ressource à ajouter à la main**. Pour l'ajouter à un dashboard :
 
 1. Dashboard > **Modifier** > **Ajouter une carte**
 2. Chercher **Timekpra** dans la liste des cartes
 3. La carte affiche tous les contrôles avec des boutons **+/-** pour modifier les valeurs directement
+
+> Après installation ou mise à jour, faites un **rechargement forcé** du navigateur (Ctrl+Shift+R) si la carte n'apparaît pas immédiatement — c'est du cache frontend.
+
+### Si la carte n'apparaît pas (secours manuel)
+
+Si l'auto-chargement ne fonctionne pas (mode Lovelace YAML, version HA particulière…), ajoutez la ressource **manuellement** :
+
+1. **Paramètres** > **Tableaux de bord** > **⋮** > **Ressources** > **Ajouter une ressource**
+2. URL : `/timekpra/timekpra-card.js` *(ou `/local/timekpra-card.js`, également déployée)*
+3. Type : **Module JavaScript**
+4. Enregistrer, puis **Ctrl+Shift+R**
+
+En mode **YAML**, déclarez plutôt dans la config Lovelace :
+
+```yaml
+resources:
+  - url: /timekpra/timekpra-card.js
+    type: module
+```
 
 ### Fonctionnalités de la carte
 

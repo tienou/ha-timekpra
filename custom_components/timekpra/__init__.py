@@ -32,6 +32,8 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.NUMBER, Platform.SWITCH, Platform.SELECT, Platform.SENSOR]
 
 CARD_JS = "timekpra-card.js"
+# Served straight from the integration folder (HA-recommended way), no /config/www needed.
+CARD_URL = f"/{DOMAIN}/{CARD_JS}"
 
 
 def _get_version() -> str:
@@ -45,8 +47,51 @@ def _get_version() -> str:
         return "0"
 
 
+async def _register_card_frontend(hass: HomeAssistant) -> None:
+    """Serve the Lovelace card and auto-load it in the frontend.
+
+    HA-recommended approach: serve the JS via a static path, then register it
+    as an extra frontend module so the card is available WITHOUT the user
+    adding a dashboard resource by hand (works in storage and YAML modes).
+    """
+    from homeassistant.components.http import StaticPathConfig
+
+    src = Path(__file__).parent / "www" / CARD_JS
+
+    # 1. Serve the JS straight from the integration folder.
+    try:
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(CARD_URL, str(src), False)]
+        )
+    except RuntimeError:
+        # Path already registered (integration set up earlier this run) — fine.
+        pass
+    except Exception:
+        _LOGGER.warning("Could not register static path for the Timekpra card")
+        return
+
+    # 2. Auto-load it on the frontend. The version query busts the browser
+    #    cache automatically on every upgrade.
+    try:
+        from homeassistant.components import frontend
+
+        frontend.add_extra_js_url(hass, f"{CARD_URL}?v={_get_version()}")
+        _LOGGER.info("Timekpra card auto-loaded from %s", CARD_URL)
+    except Exception:
+        _LOGGER.warning(
+            "Could not auto-load the Timekpra card. Add it manually as a "
+            "dashboard resource: URL '%s', type 'JavaScript Module'.",
+            CARD_URL,
+        )
+
+
 async def _deploy_card(hass: HomeAssistant) -> None:
-    """Copy the JS card to www/ and register it as a Lovelace resource."""
+    """Copy the card into /config/www (→ /local/) as well.
+
+    Backward compatibility for installs that already registered a
+    ``/local/timekpra-card.js`` resource, and a manual-resource fallback.
+    Auto-loading is handled by :func:`_register_card_frontend`.
+    """
     src = Path(__file__).parent / "www" / CARD_JS
     dst_dir = Path(hass.config.path("www"))
     dst_dir.mkdir(exist_ok=True)
@@ -55,16 +100,16 @@ async def _deploy_card(hass: HomeAssistant) -> None:
     # Always copy — ensures updates are deployed after HACS upgrade
     try:
         await hass.async_add_executor_job(shutil.copy2, str(src), str(dst))
-        version = _get_version()
-        _LOGGER.info("Timekpra card v%s deployed to %s", version, dst)
+        _LOGGER.debug("Timekpra card v%s copied to %s", _get_version(), dst)
     except Exception:
         _LOGGER.warning("Could not copy card JS from %s to %s", src, dst)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up Timekpra and deploy the custom Lovelace card."""
+    """Set up Timekpra and expose the custom Lovelace card."""
     hass.data.setdefault(DOMAIN, {})
-    await _deploy_card(hass)
+    await _register_card_frontend(hass)  # auto-load (recommended path)
+    await _deploy_card(hass)  # /local fallback + backward compatibility
     return True
 
 
