@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import TimekpraConfigEntry
 from .const import DOMAIN, LOCKOUT_TYPES
 from .coordinator import TimekpraCoordinator
 from .entity import TimekpraEntity
@@ -18,14 +19,13 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: TimekpraConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Timekpra select entities."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator: TimekpraCoordinator = data["coordinator"]
-    ssh: TimekpraSSH = data["ssh"]
-    target_user: str = data["target_user"]
+    coordinator = entry.runtime_data.coordinator
+    ssh = entry.runtime_data.ssh
+    target_user = entry.runtime_data.target_user
 
     async_add_entities([
         TimekpraLockoutType(coordinator, ssh, target_user, entry),

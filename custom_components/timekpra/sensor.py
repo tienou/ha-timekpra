@@ -9,6 +9,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from . import TimekpraConfigEntry
 from .const import DOMAIN
 from .coordinator import TimekpraCoordinator
 from .entity import TimekpraEntity
@@ -18,13 +19,12 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: TimekpraConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Timekpra sensor entities."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator: TimekpraCoordinator = data["coordinator"]
-    target_user: str = data["target_user"]
+    coordinator = entry.runtime_data.coordinator
+    target_user = entry.runtime_data.target_user
 
     async_add_entities(
         [

@@ -8,11 +8,14 @@ from typing import Any
 
 import asyncssh
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
+    CONF_SSH_HOST,
+    CONF_TARGET_USER,
     DEFAULT_NOTIFICATION_THRESHOLD,
     DEFAULT_PROFILES,
     DOMAIN,
@@ -60,24 +63,30 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(
         self,
         hass: HomeAssistant,
+        entry: ConfigEntry,
         ssh: TimekpraSSH,
-        target_user: str,
-        host: str,
     ) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
+            config_entry=entry,
             update_interval=timedelta(seconds=SCAN_INTERVAL_SECONDS),
+            always_update=False,
         )
         self.ssh = ssh
-        self.target_user = target_user
+        self.target_user = entry.data[CONF_TARGET_USER]
         # Store key based on host+user (stable across reinstalls)
-        store_key = f"{DOMAIN}_state_{host}_{target_user}"
+        store_key = f"{DOMAIN}_state_{entry.data[CONF_SSH_HOST]}_{self.target_user}"
         self._store = Store(hass, STORAGE_VERSION, store_key)
         self._pending: dict[str, list] = {}
         self.saved_values: dict[str, Any] = {}
         self._last_known_data: dict[str, Any] | None = None
+
+    async def _async_setup(self) -> None:
+        """Run once during async_config_entry_first_refresh: load persisted
+        state and wire host-key pinning before the first connection."""
+        await self.async_load_pending()
 
     # ── Persistent storage ──────────────────────────────────────────
 

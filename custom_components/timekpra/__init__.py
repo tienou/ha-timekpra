@@ -3,14 +3,17 @@ from __future__ import annotations
 
 import logging
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.exceptions import ServiceValidationError
 import homeassistant.helpers.config_validation as cv
+from homeassistant.loader import async_get_integration
 
 from .const import (
     CONF_SSH_HOST,
@@ -36,18 +39,28 @@ CARD_JS = "timekpra-card.js"
 CARD_URL = f"/{DOMAIN}/{CARD_JS}"
 
 
-def _get_version() -> str:
-    """Read version from manifest.json for cache-busting."""
-    import json
+@dataclass
+class TimekpraRuntimeData:
+    """Per-entry runtime objects, stored on the config entry."""
 
-    manifest = Path(__file__).parent / "manifest.json"
-    try:
-        return json.loads(manifest.read_text()).get("version", "0")
-    except Exception:
-        return "0"
+    coordinator: TimekpraCoordinator
+    ssh: TimekpraSSH
+    target_user: str
 
 
-async def _register_card_frontend(hass: HomeAssistant) -> None:
+type TimekpraConfigEntry = ConfigEntry[TimekpraRuntimeData]
+
+
+async def _async_card_version(hass: HomeAssistant) -> str:
+    """Return the integration version (used as the card cache-buster).
+
+    Reads the loaded integration metadata — no blocking file I/O in the loop.
+    """
+    integration = await async_get_integration(hass, DOMAIN)
+    return str(integration.version or "0")
+
+
+async def _register_card_frontend(hass: HomeAssistant, version: str) -> None:
     """Serve the Lovelace card and auto-load it in the frontend.
 
     HA-recommended approach: serve the JS via a static path, then register it
@@ -64,7 +77,7 @@ async def _register_card_frontend(hass: HomeAssistant) -> None:
             [StaticPathConfig(CARD_URL, str(src), False)]
         )
     except RuntimeError:
-        # Path already registered (integration set up earlier this run) — fine.
+        # Path already registered (set up earlier this run) — fine.
         pass
     except Exception:
         _LOGGER.warning("Could not register static path for the Timekpra card")
@@ -75,7 +88,7 @@ async def _register_card_frontend(hass: HomeAssistant) -> None:
     try:
         from homeassistant.components import frontend
 
-        frontend.add_extra_js_url(hass, f"{CARD_URL}?v={_get_version()}")
+        frontend.add_extra_js_url(hass, f"{CARD_URL}?v={version}")
         _LOGGER.info("Timekpra card auto-loaded from %s", CARD_URL)
     except Exception:
         _LOGGER.warning(
@@ -85,8 +98,14 @@ async def _register_card_frontend(hass: HomeAssistant) -> None:
         )
 
 
+def _copy_card_to_www(src: Path, dst_dir: Path) -> None:
+    """Blocking copy (runs in executor): mirror the card into /config/www."""
+    dst_dir.mkdir(exist_ok=True)
+    shutil.copy2(str(src), str(dst_dir / CARD_JS))
+
+
 async def _deploy_card(hass: HomeAssistant) -> None:
-    """Copy the card into /config/www (→ /local/) as well.
+    """Also mirror the card into /config/www (→ /local/).
 
     Backward compatibility for installs that already registered a
     ``/local/timekpra-card.js`` resource, and a manual-resource fallback.
@@ -94,26 +113,67 @@ async def _deploy_card(hass: HomeAssistant) -> None:
     """
     src = Path(__file__).parent / "www" / CARD_JS
     dst_dir = Path(hass.config.path("www"))
-    dst_dir.mkdir(exist_ok=True)
-    dst = dst_dir / CARD_JS
-
-    # Always copy — ensures updates are deployed after HACS upgrade
     try:
-        await hass.async_add_executor_job(shutil.copy2, str(src), str(dst))
-        _LOGGER.debug("Timekpra card v%s copied to %s", _get_version(), dst)
+        await hass.async_add_executor_job(_copy_card_to_www, src, dst_dir)
     except Exception:
-        _LOGGER.warning("Could not copy card JS from %s to %s", src, dst)
+        _LOGGER.warning("Could not copy card JS to %s", dst_dir)
+
+
+@callback
+def _register_services(hass: HomeAssistant) -> None:
+    """Register the profile services once (integration-wide)."""
+    if hass.services.has_service(DOMAIN, "save_profile"):
+        return
+
+    def _coordinator_for(call: ServiceCall) -> TimekpraCoordinator:
+        loaded = [
+            e
+            for e in hass.config_entries.async_entries(DOMAIN)
+            if e.state is ConfigEntryState.LOADED
+            and getattr(e, "runtime_data", None)
+        ]
+        entry_id = call.data.get("entry_id")
+        if entry_id:
+            for e in loaded:
+                if e.entry_id == entry_id:
+                    return e.runtime_data.coordinator
+            raise ServiceValidationError(f"No loaded Timekpra entry '{entry_id}'")
+        if len(loaded) == 1:
+            return loaded[0].runtime_data.coordinator
+        raise ServiceValidationError(
+            "Specify entry_id when multiple devices are configured"
+        )
+
+    async def _handle_save_profile(call: ServiceCall) -> None:
+        await _coordinator_for(call).async_save_profile(call.data["name"])
+
+    async def _handle_delete_profile(call: ServiceCall) -> None:
+        await _coordinator_for(call).async_delete_profile(call.data["name"])
+
+    profile_schema = vol.Schema(
+        {
+            vol.Required("name"): cv.string,
+            vol.Optional("entry_id"): cv.string,
+        }
+    )
+    hass.services.async_register(
+        DOMAIN, "save_profile", _handle_save_profile, schema=profile_schema
+    )
+    hass.services.async_register(
+        DOMAIN, "delete_profile", _handle_delete_profile, schema=profile_schema
+    )
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up Timekpra and expose the custom Lovelace card."""
-    hass.data.setdefault(DOMAIN, {})
-    await _register_card_frontend(hass)  # auto-load (recommended path)
+    """Set up Timekpra: expose the Lovelace card and register services."""
+    version = await _async_card_version(hass)
+    await _register_card_frontend(hass, version)  # auto-load (recommended path)
     await _deploy_card(hass)  # /local fallback + backward compatibility
+    _register_services(hass)
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: TimekpraConfigEntry) -> bool:
     """Set up Timekpra from a config entry."""
     ssh = TimekpraSSH(
         host=entry.data[CONF_SSH_HOST],
@@ -126,51 +186,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sudo_password=entry.data.get(CONF_SUDO_PASSWORD, ""),
     )
 
-    coordinator = TimekpraCoordinator(
-        hass, ssh, entry.data[CONF_TARGET_USER], entry.data[CONF_SSH_HOST]
-    )
-    await coordinator.async_load_pending()
+    coordinator = TimekpraCoordinator(hass, entry, ssh)
+    # _async_setup() (loads persisted state + wires host-key pinning) runs
+    # automatically inside async_config_entry_first_refresh().
     await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        "coordinator": coordinator,
-        "ssh": ssh,
-        "target_user": entry.data[CONF_TARGET_USER],
-    }
+    entry.runtime_data = TimekpraRuntimeData(
+        coordinator=coordinator,
+        ssh=ssh,
+        target_user=entry.data[CONF_TARGET_USER],
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
-    # ── Profile services ───────────────────────────────────────────
-    async def _get_coordinator(call: ServiceCall) -> TimekpraCoordinator:
-        entry_id = call.data.get("entry_id")
-        if entry_id:
-            return hass.data[DOMAIN][entry_id]["coordinator"]
-        # If only one entry, use it automatically
-        entries = list(hass.data[DOMAIN].values())
-        if len(entries) == 1:
-            return entries[0]["coordinator"]
-        raise ValueError("Specify entry_id when multiple devices are configured")
-
-    async def _handle_save_profile(call: ServiceCall) -> None:
-        coordinator = await _get_coordinator(call)
-        await coordinator.async_save_profile(call.data["name"])
-
-    async def _handle_delete_profile(call: ServiceCall) -> None:
-        coordinator = await _get_coordinator(call)
-        await coordinator.async_delete_profile(call.data["name"])
-
-    profile_schema = vol.Schema({
-        vol.Required("name"): cv.string,
-        vol.Optional("entry_id"): cv.string,
-    })
-
-    if not hass.services.has_service(DOMAIN, "save_profile"):
-        hass.services.async_register(
-            DOMAIN, "save_profile", _handle_save_profile, schema=profile_schema
-        )
-        hass.services.async_register(
-            DOMAIN, "delete_profile", _handle_delete_profile, schema=profile_schema
-        )
 
     # Reload integration when options are changed
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
@@ -178,13 +205,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_reload_entry(
+    hass: HomeAssistant, entry: TimekpraConfigEntry
+) -> None:
     """Reload the integration when config changes."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id)
-    return unload_ok
+async def async_unload_entry(hass: HomeAssistant, entry: TimekpraConfigEntry) -> bool:
+    """Unload a config entry (runtime_data is cleared by HA automatically)."""
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)

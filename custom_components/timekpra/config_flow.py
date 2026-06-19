@@ -148,14 +148,11 @@ class TimekpraConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> TimekpraOptionsFlow:
         """Get the options flow handler."""
-        return TimekpraOptionsFlow(config_entry)
+        return TimekpraOptionsFlow()
 
 
 class TimekpraOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for Timekpra (edit credentials / auth method)."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self._entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -165,12 +162,12 @@ class TimekpraOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             errors = _validate(user_input)
             if not errors:
-                data = _normalize({**self._entry.data, **user_input})
-                self.hass.config_entries.async_update_entry(self._entry, data=data)
+                data = _normalize({**self.config_entry.data, **user_input})
+                self.hass.config_entries.async_update_entry(self.config_entry, data=data)
                 return self.async_create_entry(title="", data={})
             defaults = user_input
         else:
-            defaults = dict(self._entry.data)
+            defaults = dict(self.config_entry.data)
 
         return self.async_show_form(
             step_id="init",
