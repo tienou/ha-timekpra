@@ -344,31 +344,35 @@ class TimekpraSSH:
         )
 
     async def set_time_limits(self, user: str, limits_minutes: list[int]) -> None:
-        """Set per-day time limits (list of 7 values in minutes)."""
+        """Set per-day time limits (7 values given in minutes).
+
+        timekpr expects integer SECONDS per weekday, so convert minutes → s.
+        (Read side parses LIMITS_PER_WEEKDAYS as seconds // 60.)
+        """
         safe_user = _sanitize(user)
-        parts: list[str] = []
-        for m in limits_minutes:
-            if m >= 60 and m % 60 == 0:
-                parts.append(f"{m // 60}h")
-            else:
-                parts.append(f"{m}m")
-        limits_str = ";".join(parts)
+        limits_str = ";".join(str(int(m) * 60) for m in limits_minutes)
         await self.execute(
             self._sudo(f"timekpra --settimelimits '{safe_user}' '{limits_str}'"),
             check=True,
         )
 
     async def set_time_limit_week(self, user: str, hours: int) -> None:
+        """Set the weekly limit (given in hours). timekpr expects SECONDS."""
         safe_user = _sanitize(user)
         await self.execute(
-            self._sudo(f"timekpra --settimelimitweek '{safe_user}' '{hours}h'"),
+            self._sudo(
+                f"timekpra --settimelimitweek '{safe_user}' '{int(hours) * 3600}'"
+            ),
             check=True,
         )
 
     async def set_time_limit_month(self, user: str, hours: int) -> None:
+        """Set the monthly limit (given in hours). timekpr expects SECONDS."""
         safe_user = _sanitize(user)
         await self.execute(
-            self._sudo(f"timekpra --settimelimitmonth '{safe_user}' '{hours}h'"),
+            self._sudo(
+                f"timekpra --settimelimitmonth '{safe_user}' '{int(hours) * 3600}'"
+            ),
             check=True,
         )
 
