@@ -169,10 +169,13 @@ class TimekpraSSH:
             if not self._host_key:
                 await self._learn_host_key(conn)
             result = await conn.run(command, check=False)
-            if check and result.exit_status != 0:
+            # asyncssh's SSHCompletedProcess exposes ``returncode`` (exit code,
+            # or negative signal number) across versions; ``exit_status`` only
+            # exists on newer releases. Use returncode for compatibility.
+            if check and result.returncode != 0:
                 stderr = (result.stderr or "").strip()
                 raise TimekpraCommandError(
-                    f"exit {result.exit_status}: {stderr or 'no error output'}"
+                    f"exit {result.returncode}: {stderr or 'no error output'}"
                 )
             return result.stdout or ""
 
