@@ -303,25 +303,26 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _push_restore(self, data: dict[str, Any]) -> None:
         """Re-apply restored settings to timekpra after an override ends."""
-        await self.async_apply(
-            "set_allowed_hours",
-            data.get("hour_start", 0),
-            data.get("hour_end", 23),
-            data.get("minute_start", 0),
-            data.get("minute_end", 59),
-        )
-        await self.async_apply(
-            "set_time_limits", list(data.get("daily_limits", [60] * 7))
-        )
-        await self.async_apply("set_time_limit_week", data.get("weekly_limit", 0))
-        await self.async_apply("set_time_limit_month", data.get("monthly_limit", 0))
-        # The override had granted a full day (set_time_left = 86400). Clamp
-        # today's remaining time back to the restored daily limit so the
-        # machine is re-enforced now instead of staying unlocked until midnight.
-        daily = data.get("daily_limits", [])
-        today = dt_util.now().weekday()
-        if today < len(daily):
-            await self.async_apply("set_time_left", "=", int(daily[today]) * 60)
+        async with self.ssh.session():  # one SSH connection for the whole batch
+            await self.async_apply(
+                "set_allowed_hours",
+                data.get("hour_start", 0),
+                data.get("hour_end", 23),
+                data.get("minute_start", 0),
+                data.get("minute_end", 59),
+            )
+            await self.async_apply(
+                "set_time_limits", list(data.get("daily_limits", [60] * 7))
+            )
+            await self.async_apply("set_time_limit_week", data.get("weekly_limit", 0))
+            await self.async_apply("set_time_limit_month", data.get("monthly_limit", 0))
+            # The override had granted a full day (set_time_left = 86400). Clamp
+            # today's remaining time back to the restored daily limit so the
+            # machine is re-enforced now instead of staying unlocked until midnight.
+            daily = data.get("daily_limits", [])
+            today = dt_util.now().weekday()
+            if today < len(daily):
+                await self.async_apply("set_time_left", "=", int(daily[today]) * 60)
 
     async def async_apply_profile(self, name: str) -> None:
         """Load a profile and apply all its settings to timekpra."""
@@ -392,11 +393,12 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.info("Applied profile: %s (override ON)", name)
 
             async def _push_override():
-                await self.async_apply("set_allowed_hours", 0, 23, 0, 59)
-                await self.async_apply("set_time_limits", [UNLIMITED_DAILY] * 7)
-                await self.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
-                await self.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
-                await self.async_apply("set_time_left", "=", 86400)
+                async with self.ssh.session():  # one SSH connection for the batch
+                    await self.async_apply("set_allowed_hours", 0, 23, 0, 59)
+                    await self.async_apply("set_time_limits", [UNLIMITED_DAILY] * 7)
+                    await self.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
+                    await self.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
+                    await self.async_apply("set_time_left", "=", 86400)
 
             self.hass.async_create_task(_push_override())
             return
@@ -428,37 +430,38 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.info("Applied profile: %s", name)
 
         async def _push_profile():
-            await self.async_apply(
-                "set_allowed_days",
-                profile.get("allowed_days", data.get("allowed_days", [1, 2, 3, 4, 5, 6, 7])),
-            )
-            await self.async_apply(
-                "set_allowed_hours",
-                profile.get("hour_start", 0),
-                profile.get("hour_end", 23),
-                profile.get("minute_start", 0),
-                profile.get("minute_end", 59),
-            )
-            await self.async_apply(
-                "set_time_limits",
-                list(profile.get("daily_limits", [60] * 7)),
-            )
-            await self.async_apply(
-                "set_time_limit_week",
-                profile.get("weekly_limit", 9),
-            )
-            await self.async_apply(
-                "set_time_limit_month",
-                profile.get("monthly_limit", 40),
-            )
-            await self.async_apply(
-                "set_track_inactive",
-                profile.get("track_inactive", False),
-            )
-            await self.async_apply(
-                "set_lockout_type",
-                profile.get("lockout_type", "lock"),
-            )
+            async with self.ssh.session():  # one SSH connection for all 7 cmds
+                await self.async_apply(
+                    "set_allowed_days",
+                    profile.get("allowed_days", data.get("allowed_days", [1, 2, 3, 4, 5, 6, 7])),
+                )
+                await self.async_apply(
+                    "set_allowed_hours",
+                    profile.get("hour_start", 0),
+                    profile.get("hour_end", 23),
+                    profile.get("minute_start", 0),
+                    profile.get("minute_end", 59),
+                )
+                await self.async_apply(
+                    "set_time_limits",
+                    list(profile.get("daily_limits", [60] * 7)),
+                )
+                await self.async_apply(
+                    "set_time_limit_week",
+                    profile.get("weekly_limit", 9),
+                )
+                await self.async_apply(
+                    "set_time_limit_month",
+                    profile.get("monthly_limit", 40),
+                )
+                await self.async_apply(
+                    "set_track_inactive",
+                    profile.get("track_inactive", False),
+                )
+                await self.async_apply(
+                    "set_lockout_type",
+                    profile.get("lockout_type", "lock"),
+                )
 
         self.hass.async_create_task(_push_profile())
 

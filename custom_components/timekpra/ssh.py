@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
 
 import asyncssh
 
@@ -72,6 +73,9 @@ class TimekpraSSH:
         # Async callback invoked with the learned key so the caller can
         # persist it. Set by the coordinator after loading its store.
         self.host_key_saver: Any = None
+        # When set (via session()), execute() reuses this open connection
+        # instead of opening a fresh one per command.
+        self._session_conn: Any = None
         self._config_path: str | None = None
         self._time_path: str | None = None
 
@@ -142,16 +146,9 @@ class TimekpraSSH:
             return f"echo '{safe_pw}' | sudo -S -p '' {command}"
         return f"sudo -n {command}"
 
-    async def _execute_on_host(
-        self, host: str, command: str, check: bool = False
-    ) -> str:
-        """Execute a command via SSH on a specific host."""
-        _LOGGER.debug(
-            "SSH connecting to %s@%s:%s (%s auth)",
-            self._username, host, self._port,
-            "key" if self._ssh_key else "password",
-        )
-        connect_kwargs: dict[str, Any] = {
+    def _connect_kwargs(self) -> dict[str, Any]:
+        """Build the asyncssh.connect kwargs (auth + host-key pinning)."""
+        kwargs: dict[str, Any] = {
             "port": self._port,
             "username": self._username,
             # Pinned key once known; None accepts the key on first use (TOFU).
@@ -160,28 +157,83 @@ class TimekpraSSH:
         }
         if self._ssh_key:
             # Key-based auth: never send the password to the SSH layer.
-            connect_kwargs["client_keys"] = self._get_client_keys()
+            kwargs["client_keys"] = self._get_client_keys()
         else:
-            connect_kwargs["password"] = self._password
-            connect_kwargs["client_keys"] = []
+            kwargs["password"] = self._password
+            kwargs["client_keys"] = []
+        return kwargs
 
-        async with asyncssh.connect(host, **connect_kwargs) as conn:
+    async def _run_on_conn(
+        self, conn: asyncssh.SSHClientConnection, command: str, check: bool
+    ) -> str:
+        """Run one command on an open connection (create_process streaming).
+
+        Uses create_process rather than conn.run(): asyncssh's
+        SSHCompletedProcess is a versioned Record whose fields vary (2.17.0
+        lacks .stdout / .exit_status), whereas SSHClientProcess exposes
+        stdout/stderr/returncode as stable properties.
+        """
+        proc = await conn.create_process(command)
+        stdout_data = await proc.stdout.read()
+        stderr_data = await proc.stderr.read()
+        await proc.wait_closed()
+        if check and proc.returncode not in (0, None):
+            err = (stderr_data or "").strip()
+            raise TimekpraCommandError(
+                f"exit {proc.returncode}: {err or 'no error output'}"
+            )
+        return stdout_data or ""
+
+    async def _execute_on_host(
+        self, host: str, command: str, check: bool = False
+    ) -> str:
+        """Open a one-shot connection to a host and run a single command."""
+        _LOGGER.debug(
+            "SSH connecting to %s@%s:%s (%s auth)",
+            self._username, host, self._port,
+            "key" if self._ssh_key else "password",
+        )
+        async with asyncssh.connect(host, **self._connect_kwargs()) as conn:
             if not self._host_key:
                 await self._learn_host_key(conn)
-            # Use create_process (streaming) rather than conn.run(): asyncssh's
-            # SSHCompletedProcess is a versioned Record whose fields vary
-            # (2.17.0 lacks .stdout / .exit_status), whereas SSHClientProcess
-            # exposes stdout/stderr/returncode as stable properties.
-            proc = await conn.create_process(command)
-            stdout_data = await proc.stdout.read()
-            stderr_data = await proc.stderr.read()
-            await proc.wait_closed()
-            if check and proc.returncode not in (0, None):
-                err = (stderr_data or "").strip()
-                raise TimekpraCommandError(
-                    f"exit {proc.returncode}: {err or 'no error output'}"
-                )
-            return stdout_data or ""
+            return await self._run_on_conn(conn, command, check)
+
+    @asynccontextmanager
+    async def session(self) -> AsyncIterator[None]:
+        """Reuse ONE SSH connection for every execute() call in the block.
+
+        Opens a single connection (trying the VPN host as fallback). If no host
+        is reachable, execute() transparently falls back to per-command
+        connects (which then surface the error / queue as usual) — so this is a
+        pure performance optimization with no behavioural change when offline.
+        """
+        conn = await self._open_session_conn()
+        self._session_conn = conn
+        try:
+            yield
+        finally:
+            self._session_conn = None
+            if conn is not None:
+                conn.close()
+                try:
+                    await conn.wait_closed()
+                except Exception:  # noqa: BLE001
+                    pass
+
+    async def _open_session_conn(self) -> Any:
+        """Open one connection for a session, or None if no host is reachable."""
+        hosts = [self._host] + ([self._host_vpn] if self._host_vpn else [])
+        for host in hosts:
+            try:
+                conn = await asyncssh.connect(host, **self._connect_kwargs())
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("SSH session connect failed on %s: %s", host, err)
+                continue
+            if not self._host_key:
+                await self._learn_host_key(conn)
+            _LOGGER.debug("SSH session opened to %s", host)
+            return conn
+        return None
 
     async def execute(self, command: str, check: bool = False) -> str:
         """Execute a command via SSH, trying the VPN host as fallback.
@@ -189,6 +241,10 @@ class TimekpraSSH:
         When ``check`` is True, a non-zero exit status raises
         ``TimekpraCommandError`` instead of silently returning empty output.
         """
+        # Reuse the open session connection when one is active (perf).
+        if self._session_conn is not None:
+            return await self._run_on_conn(self._session_conn, command, check)
+
         hosts = [self._host]
         if self._host_vpn:
             hosts.append(self._host_vpn)
