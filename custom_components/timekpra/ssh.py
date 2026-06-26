@@ -168,16 +168,20 @@ class TimekpraSSH:
         async with asyncssh.connect(host, **connect_kwargs) as conn:
             if not self._host_key:
                 await self._learn_host_key(conn)
-            result = await conn.run(command, check=False)
-            # asyncssh's SSHCompletedProcess exposes ``returncode`` (exit code,
-            # or negative signal number) across versions; ``exit_status`` only
-            # exists on newer releases. Use returncode for compatibility.
-            if check and result.returncode != 0:
-                stderr = (result.stderr or "").strip()
+            # Use create_process (streaming) rather than conn.run(): asyncssh's
+            # SSHCompletedProcess is a versioned Record whose fields vary
+            # (2.17.0 lacks .stdout / .exit_status), whereas SSHClientProcess
+            # exposes stdout/stderr/returncode as stable properties.
+            proc = await conn.create_process(command)
+            stdout_data = await proc.stdout.read()
+            stderr_data = await proc.stderr.read()
+            await proc.wait_closed()
+            if check and proc.returncode not in (0, None):
+                err = (stderr_data or "").strip()
                 raise TimekpraCommandError(
-                    f"exit {result.returncode}: {stderr or 'no error output'}"
+                    f"exit {proc.returncode}: {err or 'no error output'}"
                 )
-            return result.stdout or ""
+            return stdout_data or ""
 
     async def execute(self, command: str, check: bool = False) -> str:
         """Execute a command via SSH, trying the VPN host as fallback.

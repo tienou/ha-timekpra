@@ -9,5 +9,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/tienou/ha-timekpra/issues",
   "requirements": ["asyncssh==2.17.0"],
-  "version": "1.21.2"
+  "version": "1.21.3"
 }
