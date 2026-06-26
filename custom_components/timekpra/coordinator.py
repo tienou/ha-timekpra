@@ -12,6 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_SSH_HOST,
@@ -147,6 +148,13 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self.data:
                 self._last_known_data = dict(self.data)
             await self._save_state()
+        except asyncssh.PermissionDenied as err:
+            # Authentication failure (bad password/key): retrying won't help,
+            # so don't queue it forever — surface it instead.
+            _LOGGER.error(
+                "SSH authentication failed running %s (check credentials): %s",
+                method, err,
+            )
         except (OSError, asyncssh.Error):
             _LOGGER.info("Machine offline - queuing %s for later", method)
             self._pending[method] = full_args
@@ -311,7 +319,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # today's remaining time back to the restored daily limit so the
         # machine is re-enforced now instead of staying unlocked until midnight.
         daily = data.get("daily_limits", [])
-        today = datetime.now().weekday()
+        today = dt_util.now().weekday()
         if today < len(daily):
             await self.async_apply("set_time_left", "=", int(daily[today]) * 60)
 
@@ -543,7 +551,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
         daily_limits = data.get("daily_limits", [])
         # Monday=0 in Python, day index in DAYS is 0-based
-        day_index = datetime.now().weekday()
+        day_index = dt_util.now().weekday()
         if day_index >= len(daily_limits):
             return None
         limit_minutes = daily_limits[day_index]

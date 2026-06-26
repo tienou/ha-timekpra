@@ -148,6 +148,21 @@ resources:
 | **Select** | Action fin de temps (lock/suspend/shutdown), Profil actif |
 | **Sensor** | Temps utilisé aujourd'hui, Temps utilisé cette semaine, Ordinateur (en ligne/hors ligne), Modifications en attente |
 
+## Services
+
+Deux services permettent de gérer les profils via script/automatisation (ils sont aussi accessibles directement depuis la carte) :
+
+| Service | Description | Paramètres |
+|---------|-------------|------------|
+| `timekpra.save_profile` | Sauvegarde les réglages actuels dans un profil nommé | `name` (requis) · `entry_id` (optionnel si un seul appareil) |
+| `timekpra.delete_profile` | Supprime un profil utilisateur | `name` (requis) · `entry_id` (optionnel) |
+
+```yaml
+service: timekpra.save_profile
+data:
+  name: "Examens"
+```
+
 ## Fonctionnement technique
 
 - Connexion SSH via `asyncssh`, authentification par **mot de passe** ou **clé privée** (au choix)

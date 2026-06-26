@@ -245,17 +245,21 @@ class TimekpraSSH:
             path = template.format(user=safe_user)
             result = await self.execute(self._sudo(f"test -f {path}") + " && echo found")
             if "found" in result:
-                _LOGGER.debug("Found config at known path: %s", path)
+                _LOGGER.debug("Found file at known path: %s", path)
                 return path
-        # Fallback: search the filesystem
-        _LOGGER.debug("Known paths failed, searching filesystem for *%s*.conf", safe_user)
+        # Fallback: search the filesystem for the right extension and USE the
+        # first match (previously the result was logged but discarded).
+        suffix = "conf" if candidates[0].endswith(".conf") else "time"
+        _LOGGER.debug("Known paths failed, searching filesystem for *%s*.%s", safe_user, suffix)
         result = await self.execute(
-            self._sudo(f"find /etc /var/lib -name '*{safe_user}*.conf' -o -name '*{safe_user}*.time' 2>/dev/null")
+            self._sudo(f"find /etc /var/lib -name '*{safe_user}*.{suffix}' 2>/dev/null")
         )
-        if result.strip():
-            _LOGGER.info("Filesystem search found: %s", result.strip())
-        else:
-            _LOGGER.warning("No config/time files found for user %s on filesystem", safe_user)
+        for line in result.splitlines():
+            line = line.strip()
+            if line:
+                _LOGGER.info("Found timekpr file via filesystem search: %s", line)
+                return line
+        _LOGGER.warning("No .%s file found for user %s on filesystem", suffix, safe_user)
         return None
 
     async def get_config(self, user: str) -> dict[str, str] | None:

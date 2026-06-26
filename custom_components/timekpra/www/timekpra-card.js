@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.9.0";
+const CARD_VERSION = "1.22.0";
 
 class TimekpraCard extends HTMLElement {
   static get properties() {
@@ -131,6 +131,12 @@ class TimekpraCard extends HTMLElement {
 
   _render() {
     if (!this.config || !this._hass) return;
+
+    // Escape user-controlled strings (profile names, title) before inserting
+    // them into innerHTML — prevents stored XSS via a crafted profile name.
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+    );
 
     const p = this._prefix();
     const days = [
@@ -409,7 +415,7 @@ class TimekpraCard extends HTMLElement {
               <ha-icon icon="${isOnline ? "mdi:desktop-classic" : "mdi:desktop-classic-off"}"></ha-icon>
             </div>
             <div class="tkp-header-info">
-              <div class="tkp-header-title">${title}</div>
+              <div class="tkp-header-title">${esc(title)}</div>
               <div class="tkp-header-status">
                 ${isOnline ? "En ligne" : "Hors ligne"}
                 ${parseInt(pending) > 0 ? `<span class="tkp-pending-badge">${pending} en attente</span>` : ""}
@@ -429,7 +435,7 @@ class TimekpraCard extends HTMLElement {
             <div class="tkp-profile-row">
               <select class="tkp-select" id="tkp-profile-select" data-select="${profileSelectEid}">
                 ${profileOptions.map((opt) =>
-                  `<option value="${opt}" ${activeProfile === opt ? "selected" : ""}>${opt}</option>`
+                  `<option value="${esc(opt)}" ${activeProfile === opt ? "selected" : ""}>${esc(opt)}</option>`
                 ).join("")}
               </select>
               ${canDelete ? `<button class="tkp-icon-btn" id="tkp-profile-update" title="Mettre à jour ce profil">
