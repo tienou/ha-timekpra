@@ -30,7 +30,8 @@
       "cannot_connect": "SSH-Verbindung fehlgeschlagen. Überprüfen Sie Host, Port und Zugangsdaten.",
       "password_required": "Für die Passwort-Anmeldung ist ein Passwort erforderlich.",
       "key_required": "Für die Schlüssel-Anmeldung ist ein privater Schlüssel erforderlich.",
-      "invalid_key": "Der private Schlüssel konnte nicht gelesen werden. Prüfen Sie Format und Passphrase."
+      "invalid_key": "Der private Schlüssel konnte nicht gelesen werden. Prüfen Sie Format und Passphrase.",
+      "invalid_user": "Ungültiger Login-Name: nur Buchstaben, Ziffern, „_“, „-“ und „.“, nicht mit „-“ beginnend."
     },
     "abort": {
       "already_configured": "Dieser Benutzer ist bereits konfiguriert."
@@ -66,7 +67,8 @@
       "cannot_connect": "SSH-Verbindung fehlgeschlagen. Überprüfen Sie Host, Port und Zugangsdaten.",
       "password_required": "Für die Passwort-Anmeldung ist ein Passwort erforderlich.",
       "key_required": "Für die Schlüssel-Anmeldung ist ein privater Schlüssel erforderlich.",
-      "invalid_key": "Der private Schlüssel konnte nicht gelesen werden. Prüfen Sie Format und Passphrase."
+      "invalid_key": "Der private Schlüssel konnte nicht gelesen werden. Prüfen Sie Format und Passphrase.",
+      "invalid_user": "Ungültiger Login-Name: nur Buchstaben, Ziffern, „_“, „-“ und „.“, nicht mit „-“ beginnend."
     }
   },
   "entity": {
@@ -222,6 +224,19 @@
           "description": "Konfigurationseintrags-ID (optional, wenn nur ein Gerät konfiguriert ist)."
         }
       }
+    }
+  },
+  "selector": {
+    "auth_method": {
+      "options": {
+        "password": "Passwort",
+        "key": "SSH-Schlüssel"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_hour_range": {
+      "message": "Ungültige Zeitspanne: Der Beginn ({start}) muss vor dem Ende ({end}) liegen."
     }
   }
 }

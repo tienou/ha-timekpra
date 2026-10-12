@@ -10,6 +10,7 @@ from homeassistant.components.number import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import TimekpraConfigEntry
@@ -17,6 +18,7 @@ from .const import DAYS, DEFAULT_NOTIFICATION_THRESHOLD, DOMAIN
 from .coordinator import TimekpraCoordinator
 from .entity import TimekpraEntity
 from .ssh import TimekpraSSH
+from .timekpr_data import valid_hour_range
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,7 +98,10 @@ class TimekpraDailyLimit(TimekpraEntity, NumberEntity):
         limits[self._day_index] = int(value)
         self.coordinator.data["daily_limits"] = limits
         self.async_write_ha_state()
-        await self.coordinator.async_apply("set_time_limits", limits)
+        # Re-aligned on the allowed days (Timekpr's positional format).
+        await self.coordinator.async_apply(
+            "set_time_limits", self.coordinator.timekpr_limits(limits)
+        )
 
 
 # ── Weekly limit ───────────────────────────────────────────────────
@@ -162,6 +167,43 @@ class TimekpraMonthlyLimit(TimekpraEntity, NumberEntity):
 # ── Hour range ─────────────────────────────────────────────────────
 
 
+async def _async_set_hours(
+    entity: TimekpraEntity, key: str, value: float
+) -> None:
+    """Change one bound of the allowed-hours range, refusing an empty range.
+
+    An inverted range (start after end) used to be sent to timekpra as an
+    empty hour list: the command failed (or locked the child out all day).
+    """
+    data = entity.coordinator.data
+    hours = {
+        "hour_start": data.get("hour_start", 0),
+        "hour_end": data.get("hour_end", 23),
+        "minute_start": data.get("minute_start", 0),
+        "minute_end": data.get("minute_end", 59),
+    }
+    hours[key] = int(value)
+    if not valid_hour_range(
+        hours["hour_start"], hours["hour_end"],
+        hours["minute_start"], hours["minute_end"],
+    ):
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="invalid_hour_range",
+            translation_placeholders={
+                "start": f"{hours['hour_start']}:{hours['minute_start']:02d}",
+                "end": f"{hours['hour_end']}:{hours['minute_end']:02d}",
+            },
+        )
+    data[key] = int(value)
+    entity.async_write_ha_state()
+    await entity.coordinator.async_apply(
+        "set_allowed_hours",
+        hours["hour_start"], hours["hour_end"],
+        hours["minute_start"], hours["minute_end"],
+    )
+
+
 class TimekpraHourStart(TimekpraEntity, NumberEntity):
     """Box for the earliest allowed login hour."""
 
@@ -183,14 +225,7 @@ class TimekpraHourStart(TimekpraEntity, NumberEntity):
         return self.coordinator.data.get("hour_start")
 
     async def async_set_native_value(self, value: float) -> None:
-        hour_end = self.coordinator.data.get("hour_end", 23)
-        minute_start = self.coordinator.data.get("minute_start", 0)
-        minute_end = self.coordinator.data.get("minute_end", 59)
-        self.coordinator.data["hour_start"] = int(value)
-        self.async_write_ha_state()
-        await self.coordinator.async_apply(
-            "set_allowed_hours", int(value), hour_end, minute_start, minute_end
-        )
+        await _async_set_hours(self, "hour_start", value)
 
 
 class TimekpraMinuteStart(TimekpraEntity, NumberEntity):
@@ -214,14 +249,7 @@ class TimekpraMinuteStart(TimekpraEntity, NumberEntity):
         return self.coordinator.data.get("minute_start", 0)
 
     async def async_set_native_value(self, value: float) -> None:
-        hour_start = self.coordinator.data.get("hour_start", 0)
-        hour_end = self.coordinator.data.get("hour_end", 23)
-        minute_end = self.coordinator.data.get("minute_end", 59)
-        self.coordinator.data["minute_start"] = int(value)
-        self.async_write_ha_state()
-        await self.coordinator.async_apply(
-            "set_allowed_hours", hour_start, hour_end, int(value), minute_end
-        )
+        await _async_set_hours(self, "minute_start", value)
 
 
 class TimekpraHourEnd(TimekpraEntity, NumberEntity):
@@ -245,14 +273,7 @@ class TimekpraHourEnd(TimekpraEntity, NumberEntity):
         return self.coordinator.data.get("hour_end")
 
     async def async_set_native_value(self, value: float) -> None:
-        hour_start = self.coordinator.data.get("hour_start", 0)
-        minute_start = self.coordinator.data.get("minute_start", 0)
-        minute_end = self.coordinator.data.get("minute_end", 59)
-        self.coordinator.data["hour_end"] = int(value)
-        self.async_write_ha_state()
-        await self.coordinator.async_apply(
-            "set_allowed_hours", hour_start, int(value), minute_start, minute_end
-        )
+        await _async_set_hours(self, "hour_end", value)
 
 
 class TimekpraMinuteEnd(TimekpraEntity, NumberEntity):
@@ -276,14 +297,7 @@ class TimekpraMinuteEnd(TimekpraEntity, NumberEntity):
         return self.coordinator.data.get("minute_end", 59)
 
     async def async_set_native_value(self, value: float) -> None:
-        hour_start = self.coordinator.data.get("hour_start", 0)
-        hour_end = self.coordinator.data.get("hour_end", 23)
-        minute_start = self.coordinator.data.get("minute_start", 0)
-        self.coordinator.data["minute_end"] = int(value)
-        self.async_write_ha_state()
-        await self.coordinator.async_apply(
-            "set_allowed_hours", hour_start, hour_end, minute_start, int(value)
-        )
+        await _async_set_hours(self, "minute_end", value)
 
 
 # ── Notification threshold ────────────────────────────────────────

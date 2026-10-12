@@ -30,7 +30,8 @@
       "cannot_connect": "Impossible de se connecter en SSH. Vérifiez l'hôte, le port et les identifiants.",
       "password_required": "Un mot de passe est requis pour l'authentification par mot de passe.",
       "key_required": "Une clé privée est requise pour l'authentification par clé.",
-      "invalid_key": "Impossible de lire la clé privée. Vérifiez son format et sa phrase secrète."
+      "invalid_key": "Impossible de lire la clé privée. Vérifiez son format et sa phrase secrète.",
+      "invalid_user": "Nom de login invalide : lettres, chiffres, « _ », « - » et « . » uniquement, sans « - » au début."
     },
     "abort": {
       "already_configured": "Cet utilisateur est déjà configuré."
@@ -66,7 +67,8 @@
       "cannot_connect": "Impossible de se connecter en SSH. Vérifiez l'hôte, le port et les identifiants.",
       "password_required": "Un mot de passe est requis pour l'authentification par mot de passe.",
       "key_required": "Une clé privée est requise pour l'authentification par clé.",
-      "invalid_key": "Impossible de lire la clé privée. Vérifiez son format et sa phrase secrète."
+      "invalid_key": "Impossible de lire la clé privée. Vérifiez son format et sa phrase secrète.",
+      "invalid_user": "Nom de login invalide : lettres, chiffres, « _ », « - » et « . » uniquement, sans « - » au début."
     }
   },
   "entity": {
@@ -222,6 +224,19 @@
           "description": "ID de l'entrée de configuration (optionnel si un seul appareil)."
         }
       }
+    }
+  },
+  "selector": {
+    "auth_method": {
+      "options": {
+        "password": "Mot de passe",
+        "key": "Clé SSH"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_hour_range": {
+      "message": "Plage horaire invalide : le début ({start}) doit précéder la fin ({end})."
     }
   }
 }

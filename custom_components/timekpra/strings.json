@@ -30,7 +30,8 @@
       "cannot_connect": "Cannot connect via SSH. Please check host, port, and credentials.",
       "password_required": "A password is required for password authentication.",
       "key_required": "A private key is required for key authentication.",
-      "invalid_key": "The private key could not be read. Check its format and passphrase."
+      "invalid_key": "The private key could not be read. Check its format and passphrase.",
+      "invalid_user": "Invalid login name: letters, digits, '_', '-' and '.' only, not starting with '-'."
     },
     "abort": {
       "already_configured": "This user is already configured."
@@ -66,7 +67,8 @@
       "cannot_connect": "Cannot connect via SSH. Please check host, port, and credentials.",
       "password_required": "A password is required for password authentication.",
       "key_required": "A private key is required for key authentication.",
-      "invalid_key": "The private key could not be read. Check its format and passphrase."
+      "invalid_key": "The private key could not be read. Check its format and passphrase.",
+      "invalid_user": "Invalid login name: letters, digits, '_', '-' and '.' only, not starting with '-'."
     }
   },
   "entity": {
@@ -222,6 +224,19 @@
           "description": "Config entry ID (optional if only one device is configured)."
         }
       }
+    }
+  },
+  "selector": {
+    "auth_method": {
+      "options": {
+        "password": "Password",
+        "key": "SSH key"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_hour_range": {
+      "message": "Invalid allowed hours: the start ({start}) must be before the end ({end})."
     }
   }
 }

@@ -1,14 +1,34 @@
 """SSH connection handler for Timekpra."""
 from __future__ import annotations
 
+import asyncio
+from contextvars import ContextVar
 import logging
 import re
+import shlex
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
 import asyncssh
 
+from .timekpr_data import parse_userinfo, valid_hour_range
+
 _LOGGER = logging.getLogger(__name__)
+
+# TCP connect + SSH handshake + auth. Without it a powered-off machine makes
+# asyncssh wait for the OS TCP timeout (~2 min on Linux) per host.
+CONNECT_TIMEOUT = 15
+# A remote command that never returns (hung D-Bus call, sudo prompt…) must
+# not block the coordinator forever.
+COMMAND_TIMEOUT = 30
+
+# Open session connection for the *current asyncio task* (see session()).
+# A ContextVar (not an instance attribute) so that two overlapping sessions
+# — e.g. the periodic refresh and a profile push running in a background
+# task — never use or close each other's connection.
+_SESSION: ContextVar[tuple[Any, Any] | None] = ContextVar(
+    "timekpra_ssh_session", default=None
+)
 
 CONFIG_PATHS = [
     "/var/lib/timekpr/config/timekpr.{user}.conf",
@@ -25,8 +45,12 @@ TIME_PATHS = [
 
 
 def _sanitize(value: str) -> str:
-    """Sanitize a string for safe shell use."""
-    return re.sub(r"[^a-zA-Z0-9_.\-]", "", value)
+    """Sanitize a string for safe shell use.
+
+    Leading dashes are stripped too, so the value can never be read as an
+    option by the remote command (``timekpra``, ``find``…).
+    """
+    return re.sub(r"[^a-zA-Z0-9_.\-]", "", str(value)).lstrip("-")
 
 
 class TimekpraCommandError(Exception):
@@ -73,9 +97,6 @@ class TimekpraSSH:
         # Async callback invoked with the learned key so the caller can
         # persist it. Set by the coordinator after loading its store.
         self.host_key_saver: Any = None
-        # When set (via session()), execute() reuses this open connection
-        # instead of opening a fresh one per command.
-        self._session_conn: Any = None
         self._config_path: str | None = None
         self._time_path: str | None = None
 
@@ -154,6 +175,7 @@ class TimekpraSSH:
             # Pinned key once known; None accepts the key on first use (TOFU).
             "known_hosts": self._known_hosts(),
             "login_timeout": 10,
+            "connect_timeout": CONNECT_TIMEOUT,
         }
         if self._ssh_key:
             # Key-based auth: never send the password to the SSH layer.
@@ -174,9 +196,16 @@ class TimekpraSSH:
         stdout/stderr/returncode as stable properties.
         """
         proc = await conn.create_process(command)
-        stdout_data = await proc.stdout.read()
-        stderr_data = await proc.stderr.read()
-        await proc.wait_closed()
+        try:
+            async with asyncio.timeout(COMMAND_TIMEOUT):
+                stdout_data = await proc.stdout.read()
+                stderr_data = await proc.stderr.read()
+                await proc.wait_closed()
+        except TimeoutError:
+            # TimeoutError is an OSError: callers treat it like "unreachable"
+            # (queued for later) instead of hanging the refresh forever.
+            proc.close()
+            raise
         if check and proc.returncode not in (0, None):
             err = (stderr_data or "").strip()
             raise TimekpraCommandError(
@@ -198,21 +227,36 @@ class TimekpraSSH:
                 await self._learn_host_key(conn)
             return await self._run_on_conn(conn, command, check)
 
+    def _current_session_conn(self) -> Any:
+        """Session connection opened by the current task for this host, if any."""
+        current = _SESSION.get()
+        if current is not None and current[0] is self:
+            return current[1]
+        return None
+
     @asynccontextmanager
-    async def session(self) -> AsyncIterator[None]:
+    async def session(self) -> AsyncIterator[bool]:
         """Reuse ONE SSH connection for every execute() call in the block.
 
         Opens a single connection (trying the VPN host as fallback). If no host
         is reachable, execute() transparently falls back to per-command
         connects (which then surface the error / queue as usual) — so this is a
         pure performance optimization with no behavioural change when offline.
+
+        Yields True when a connection is open. The connection is bound to the
+        current asyncio task (ContextVar): concurrent sessions in other tasks
+        get their own connection, and a nested session reuses the outer one.
         """
+        if self._current_session_conn() is not None:
+            yield True
+            return
         conn = await self._open_session_conn()
-        self._session_conn = conn
+        token = _SESSION.set((self, conn)) if conn is not None else None
         try:
-            yield
+            yield conn is not None
         finally:
-            self._session_conn = None
+            if token is not None:
+                _SESSION.reset(token)
             if conn is not None:
                 conn.close()
                 try:
@@ -226,6 +270,10 @@ class TimekpraSSH:
         for host in hosts:
             try:
                 conn = await asyncssh.connect(host, **self._connect_kwargs())
+            except (asyncssh.PermissionDenied, asyncssh.HostKeyNotVerifiable) as err:
+                # Not a "machine off" situation: make it visible.
+                _LOGGER.error("SSH session refused by %s: %s", host, err)
+                continue
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("SSH session connect failed on %s: %s", host, err)
                 continue
@@ -242,8 +290,9 @@ class TimekpraSSH:
         ``TimekpraCommandError`` instead of silently returning empty output.
         """
         # Reuse the open session connection when one is active (perf).
-        if self._session_conn is not None:
-            return await self._run_on_conn(self._session_conn, command, check)
+        session_conn = self._current_session_conn()
+        if session_conn is not None:
+            return await self._run_on_conn(session_conn, command, check)
 
         hosts = [self._host]
         if self._host_vpn:
@@ -306,9 +355,14 @@ class TimekpraSSH:
         # Fallback: search the filesystem for the right extension and USE the
         # first match (previously the result was logged but discarded).
         suffix = "conf" if candidates[0].endswith(".conf") else "time"
-        _LOGGER.debug("Known paths failed, searching filesystem for *%s*.%s", safe_user, suffix)
+        _LOGGER.debug("Known paths failed, searching filesystem for %s.%s", safe_user, suffix)
+        # Exact file names only ("timekpr.<user>.conf", "<user>.time"):
+        # '*<user>*' also matched another child's file ("ana" → "anabelle").
         result = await self.execute(
-            self._sudo(f"find /etc /var/lib -name '*{safe_user}*.{suffix}' 2>/dev/null")
+            self._sudo(
+                f"find /etc /var/lib \\( -name '{safe_user}.{suffix}' "
+                f"-o -name '*.{safe_user}.{suffix}' \\) 2>/dev/null"
+            )
         )
         for line in result.splitlines():
             line = line.strip()
@@ -319,30 +373,58 @@ class TimekpraSSH:
         return None
 
     async def get_config(self, user: str) -> dict[str, str] | None:
-        """Read and parse timekpra config for a user."""
+        """Read and parse timekpra config for a user.
+
+        Returns None (→ "offline / unknown") when the file can't be read:
+        a failed ``sudo cat`` used to yield an empty dict, which was then
+        taken for a valid config full of defaults and saved as such.
+        """
         if not self._config_path:
             self._config_path = await self._find_path(user, CONFIG_PATHS)
         if not self._config_path:
             _LOGGER.error("Config file not found for user %s", user)
             return None
         try:
-            output = await self.execute(self._sudo(f"cat {self._config_path}"))
-            return self._parse_ini(output)
-        except Exception as err:
-            _LOGGER.error("Failed to read config: %s", err)
+            output = await self.execute(
+                self._sudo(f"cat {shlex.quote(self._config_path)}"), check=True
+            )
+        except TimekpraCommandError as err:
+            _LOGGER.error("Failed to read config %s: %s", self._config_path, err)
+            self._config_path = None  # re-locate next time
             return None
+        config = self._parse_ini(output)
+        if not config:
+            _LOGGER.warning("Config file %s is empty", self._config_path)
+            return None
+        return config
 
     async def get_time_spent(self, user: str) -> dict[str, str] | None:
-        """Read time-tracking data for a user."""
+        """Read time-tracking data (``<user>.time``) for a user."""
         if not self._time_path:
             self._time_path = await self._find_path(user, TIME_PATHS)
         if not self._time_path:
             return None
         try:
-            output = await self.execute(self._sudo(f"cat {self._time_path}"))
-            return self._parse_ini(output)
-        except Exception:
+            output = await self.execute(
+                self._sudo(f"cat {shlex.quote(self._time_path)}"), check=True
+            )
+        except TimekpraCommandError:
+            self._time_path = None
             return None
+        return self._parse_ini(output) or None
+
+    async def get_user_info(self, user: str) -> dict[str, str] | None:
+        """Ask the Timekpr daemon for the user's state (``--userinfo``).
+
+        This is the authoritative source for the time left today: it includes
+        manual bonus / penalty adjustments, allowed hours and (when the user
+        is logged in) the live values ``ACTUAL_*``.
+        """
+        safe_user = _sanitize(user)
+        output = await self.execute(
+            self._sudo(f"timekpra --userinfo '{safe_user}'"), check=True
+        )
+        return parse_userinfo(output) or None
 
     @staticmethod
     def _parse_ini(raw: str) -> dict[str, str]:
@@ -362,7 +444,9 @@ class TimekpraSSH:
     async def set_allowed_days(self, user: str, days: list[int]) -> None:
         """Set which week days the user is allowed to log in."""
         safe_user = _sanitize(user)
-        days_str = ";".join(str(d) for d in sorted(days))
+        days_str = ";".join(
+            str(d) for d in sorted({int(d) for d in days}) if 1 <= d <= 7
+        )
         await self.execute(
             self._sudo(f"timekpra --setalloweddays '{safe_user}' '{days_str}'"),
             check=True,
@@ -382,6 +466,14 @@ class TimekpraSSH:
         Example: ``7[30-59];8;9;...;20[00-45]`` for 7:30→20:45.
         """
         safe_user = _sanitize(user)
+        hour_start, hour_end = int(hour_start), int(hour_end)
+        minute_start, minute_end = int(minute_start), int(minute_end)
+        if not valid_hour_range(hour_start, hour_end, minute_start, minute_end):
+            # An empty range would send '' (or "7[50-10]") to timekpra.
+            raise ValueError(
+                f"invalid allowed hours {hour_start}:{minute_start:02d}"
+                f"-{hour_end}:{minute_end:02d}"
+            )
 
         # When minute_end is 0, the user means "up to hour_end:00",
         # i.e. the last full allowed hour is hour_end - 1.
@@ -454,8 +546,12 @@ class TimekpraSSH:
     async def set_time_left(self, user: str, operator: str, seconds: int) -> None:
         """Set time left for user: operator is '+', '-', or '='."""
         safe_user = _sanitize(user)
+        if operator not in ("+", "-", "="):
+            raise ValueError(f"invalid operator {operator!r}")
         await self.execute(
-            self._sudo(f"timekpra --settimeleft '{safe_user}' '{operator}' '{seconds}'"),
+            self._sudo(
+                f"timekpra --settimeleft '{safe_user}' '{operator}' '{int(seconds)}'"
+            ),
             check=True,
         )
 
