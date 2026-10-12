@@ -1,3 +1,8 @@
+# Exemple de carte « entities » (alternative à la carte timekpra-card).
+# Les entity_id dépendent de la langue de Home Assistant au moment de
+# l'installation : ceux ci-dessous correspondent à une installation en
+# anglais. Une installation faite en français garde ses identifiants
+# français (ex. sensor.timekpra_camille_ordinateur) : adaptez-les.
 type: vertical-stack
 cards:
   # ── Status ────────────────────────────────────────────────────
