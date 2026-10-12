@@ -1,4 +1,8 @@
-const CARD_VERSION = "1.11.0";
+const CARD_VERSION = "1.24.0";
+
+const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+);
 
 // Card-chrome strings (text not covered by the integration's entity
 // translations). Entity names/states, lockout and profile labels are reused
@@ -16,7 +20,7 @@ const STRINGS = {
     update_profile_title: "Update this profile", delete_profile_title: "Delete this profile",
     create_profile_title: "Create a new profile", confirm_delete: 'Delete profile "%s"?',
     target_user_label: "Target user (child's login)", title_label: "Title (optional)",
-    define_target_user: "Please define target_user",
+    define_target_user: "Please define target_user", default_title: "Parental Control",
   },
   de: {
     profile: "Profil", today: "Heute", this_week: "Diese Woche", remaining: "Verbleibend",
@@ -30,7 +34,7 @@ const STRINGS = {
     update_profile_title: "Dieses Profil aktualisieren", delete_profile_title: "Dieses Profil löschen",
     create_profile_title: "Neues Profil erstellen", confirm_delete: 'Profil „%s“ löschen?',
     target_user_label: "Zielbenutzer (Login des Kindes)", title_label: "Titel (optional)",
-    define_target_user: "Bitte target_user angeben",
+    define_target_user: "Bitte target_user angeben", default_title: "Kindersicherung",
   },
   fr: {
     profile: "Profil", today: "Aujourd'hui", this_week: "Cette semaine", remaining: "Restant",
@@ -44,7 +48,7 @@ const STRINGS = {
     update_profile_title: "Mettre à jour ce profil", delete_profile_title: "Supprimer ce profil",
     create_profile_title: "Créer un nouveau profil", confirm_delete: 'Supprimer le profil « %s » ?',
     target_user_label: "Utilisateur cible (login de l'enfant)", title_label: "Titre (optionnel)",
-    define_target_user: "Veuillez définir target_user",
+    define_target_user: "Veuillez définir target_user", default_title: "Contrôle Parental",
   },
 };
 
@@ -93,13 +97,16 @@ class TimekpraCard extends HTMLElement {
         this.shadowRoot.activeElement.tagName === "INPUT") {
       return;
     }
-    // Skip re-render if relevant entity states haven't changed
+    // Skip re-render if relevant entity states haven't changed. The card's
+    // entities come from the registry lookup (not an entity_id prefix, which
+    // missed users like "jean-paul" and renamed entities); a registry or
+    // language change also re-renders.
     if (oldHass && this.config) {
-      const p = `timekpra_${this.config.target_user}`;
-      const changed = Object.keys(hass.states).some((eid) => {
-        if (!eid.includes(p)) return false;
-        return hass.states[eid] !== oldHass.states[eid];
-      });
+      const registryChanged = hass.entities !== oldHass.entities ||
+        hass.devices !== oldHass.devices || hass.language !== oldHass.language;
+      const eids = Object.values(this._buildLookup());
+      const changed = registryChanged ||
+        eids.some((eid) => hass.states[eid] !== oldHass.states[eid]);
       if (!changed) return;
     }
     this._render();
@@ -111,19 +118,20 @@ class TimekpraCard extends HTMLElement {
   _buildLookup() {
     const map = {};
     if (!this._hass || !this._hass.entities || !this._hass.devices) return map;
-    const user = this.config.target_user;
-    let deviceId = null;
-    for (const did in this._hass.devices) {
+    const user = String(this.config.target_user);
+    const findDevice = (match) => Object.keys(this._hass.devices).find((did) => {
       const d = this._hass.devices[did];
-      if (d.identifiers && d.identifiers.some((ident) => ident[0] === "timekpra" && ident[1] === user)) {
-        deviceId = did;
-        break;
-      }
-    }
+      return d.identifiers && d.identifiers.some((ident) => ident[0] === "timekpra" && match(String(ident[1])));
+    });
+    const deviceId = findDevice((u) => u === user) ||
+      findDevice((u) => u.toLowerCase() === user.toLowerCase());
+    // Unknown target_user: show nothing rather than another child's entities
+    // (without a device every timekpra entity matched, last one winning).
+    if (!deviceId) return map;
     for (const eid in this._hass.entities) {
       const e = this._hass.entities[eid];
       if (e.platform !== "timekpra" || !e.translation_key) continue;
-      if (deviceId && e.device_id !== deviceId) continue;
+      if (e.device_id !== deviceId) continue;
       map[e.translation_key] = eid;
     }
     return map;
@@ -211,20 +219,18 @@ class TimekpraCard extends HTMLElement {
 
     // Escape user-controlled strings (profile names, title) before inserting
     // them into innerHTML — prevents stored XSS via a crafted profile name.
-    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
-    );
+    const esc = escapeHtml;
 
     const E = this._buildLookup();
-    const days = [
-      { key: "monday", label: "Mon" },
-      { key: "tuesday", label: "Tue" },
-      { key: "wednesday", label: "Wed" },
-      { key: "thursday", label: "Thu" },
-      { key: "friday", label: "Fri" },
-      { key: "saturday", label: "Sat" },
-      { key: "sunday", label: "Sun" },
-    ];
+    // Short weekday names in the HA language (2024-01-01 is a Monday).
+    let dayFmt;
+    try {
+      dayFmt = new Intl.DateTimeFormat(this._hass.language || "en", { weekday: "short" });
+    } catch (err) {
+      dayFmt = new Intl.DateTimeFormat("en", { weekday: "short" });
+    }
+    const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+      .map((key, i) => ({ key, label: escapeHtml(dayFmt.format(new Date(2024, 0, 1 + i))) }));
 
     const online = this._stateValue(E.computer);
     const pending = this._stateValue(E.pending);
@@ -271,7 +277,7 @@ class TimekpraCard extends HTMLElement {
     const notifThreshold = this._stateValue(notifThresholdEid);
 
     const user = this.config.target_user;
-    const title = this.config.title || `Parental Control - ${user.charAt(0).toUpperCase() + user.slice(1)}`;
+    const title = this.config.title || `${this._t("default_title")} - ${user.charAt(0).toUpperCase() + user.slice(1)}`;
 
     // Build day toggles
     let dayTogglesHtml = days.map((d) => {
@@ -308,7 +314,7 @@ class TimekpraCard extends HTMLElement {
 
     // Format time
     const formatTime = (val) => {
-      if (val === "unavailable" || val === null || val === "None") return "-";
+      if (val === "unavailable" || val === "unknown" || val === null || val === "None") return "-";
       const n = parseInt(val);
       if (isNaN(n)) return val;
       const h = Math.floor(n / 60);
@@ -819,7 +825,7 @@ class TimekpraCardEditor extends HTMLElement {
             ${this._t("target_user_label")}
           </label>
           <input type="text" id="target_user"
-            value="${this._config.target_user || ""}"
+            value="${escapeHtml(this._config.target_user || "")}"
             style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box;"
             placeholder="camille">
         </div>
@@ -828,9 +834,9 @@ class TimekpraCardEditor extends HTMLElement {
             ${this._t("title_label")}
           </label>
           <input type="text" id="title"
-            value="${this._config.title || ""}"
+            value="${escapeHtml(this._config.title || "")}"
             style="width: 100%; padding: 8px; border: 1px solid var(--divider-color); border-radius: 4px; box-sizing: border-box;"
-            placeholder="Parental Control - Camille">
+            placeholder="${escapeHtml(this._t("default_title"))} - Camille">
         </div>
       </div>
     `;
