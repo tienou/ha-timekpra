@@ -1,6 +1,7 @@
 """Config flow for the Timekpra integration."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import asyncssh
@@ -42,13 +43,10 @@ def _build_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
                 CONF_AUTH_METHOD, default=d.get(CONF_AUTH_METHOD, AUTH_PASSWORD)
             ): selector.SelectSelector(
                 selector.SelectSelectorConfig(
-                    options=[
-                        selector.SelectOptionDict(
-                            value=AUTH_PASSWORD, label="Mot de passe"
-                        ),
-                        selector.SelectOptionDict(value=AUTH_KEY, label="Clé SSH"),
-                    ],
+                    options=[AUTH_PASSWORD, AUTH_KEY],
                     mode=selector.SelectSelectorMode.DROPDOWN,
+                    # Labels come from translations (selector.auth_method).
+                    translation_key=CONF_AUTH_METHOD,
                 )
             ),
             vol.Optional(
@@ -72,12 +70,22 @@ def _build_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     )
 
 
+# Linux login names (useradd's default NAME_REGEX, plus upper case and dots
+# accepted by some distributions). Must not start with "-": the name is passed
+# to the remote ``timekpra`` command line.
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,31}$")
+
+
 def _validate(user_input: dict[str, Any]) -> dict[str, str]:
     """Validate the auth fields locally (no network — stays offline-friendly).
 
     Returns a mapping of field -> error key (empty when everything is valid).
     """
     errors: dict[str, str] = {}
+    # The SSH layer silently strips any other character, so "jean paul"
+    # used to manage "jeanpaul" without any warning.
+    if not _USERNAME_RE.match(str(user_input.get(CONF_TARGET_USER, ""))):
+        errors[CONF_TARGET_USER] = "invalid_user"
     method = user_input.get(CONF_AUTH_METHOD, AUTH_PASSWORD)
 
     if method == AUTH_PASSWORD:

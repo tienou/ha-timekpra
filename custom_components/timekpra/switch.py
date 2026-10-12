@@ -75,7 +75,7 @@ class TimekpraDaySwitch(TimekpraEntity, SwitchEntity):
         self._ssh = ssh
         self._day_number = day["number"]
         self._attr_unique_id = f"{entry.entry_id}_day_{day['key']}"
-        self._attr_name = f"Jour autoris\u00e9 - {day['name']}"
+        self._attr_translation_key = f"day_{day['key']}"
 
     @property
     def is_on(self) -> bool | None:
@@ -90,7 +90,13 @@ class TimekpraDaySwitch(TimekpraEntity, SwitchEntity):
         sorted_days = sorted(days)
         self.coordinator.data["allowed_days"] = sorted_days
         self.async_write_ha_state()
-        await self.coordinator.async_apply("set_allowed_days", sorted_days)
+        # Timekpr stores the daily limits positionally on the allowed days:
+        # changing the days without re-sending the limits shifted every
+        # following day's limit by one.
+        await self.coordinator.async_apply_days_and_limits(
+            sorted_days,
+            self.coordinator.data.get("daily_limits", DEFAULT_DAILY_LIMITS),
+        )
 
     async def async_turn_on(self, **kwargs) -> None:
         await self._set_days(add=True)
@@ -111,7 +117,7 @@ class TimekpraTrackInactiveSwitch(TimekpraEntity, SwitchEntity):
         super().__init__(coordinator, target_user)
         self._ssh = ssh
         self._attr_unique_id = f"{entry.entry_id}_track_inactive"
-        self._attr_name = "Compter le temps inactif"
+        self._attr_translation_key = "track_inactive"
 
     @property
     def is_on(self) -> bool | None:
@@ -143,7 +149,7 @@ class TimekpraDailyLimitToggle(TimekpraEntity, SwitchEntity):
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_daily_limit_enabled"
-        self._attr_name = "Limites quotidiennes actives"
+        self._attr_translation_key = "daily_limit_enabled"
 
     @property
     def is_on(self) -> bool:
@@ -159,7 +165,9 @@ class TimekpraDailyLimitToggle(TimekpraEntity, SwitchEntity):
         unlimited = [UNLIMITED_DAILY] * 7
         self.coordinator.data["daily_limits"] = unlimited
         self.async_write_ha_state()
-        await self.coordinator.async_apply("set_time_limits", unlimited)
+        await self.coordinator.async_apply(
+            "set_time_limits", self.coordinator.timekpr_limits(unlimited)
+        )
         # Force 24h de temps restant pour débloquer immédiatement
         await self.coordinator.async_apply("set_time_left", "=", 86400)
 
@@ -169,7 +177,9 @@ class TimekpraDailyLimitToggle(TimekpraEntity, SwitchEntity):
         )
         self.coordinator.data["daily_limits"] = list(restored)
         self.async_write_ha_state()
-        await self.coordinator.async_apply("set_time_limits", list(restored))
+        await self.coordinator.async_apply(
+            "set_time_limits", self.coordinator.timekpr_limits(list(restored))
+        )
 
 
 class TimekpraWeeklyLimitToggle(TimekpraEntity, SwitchEntity):
@@ -180,7 +190,7 @@ class TimekpraWeeklyLimitToggle(TimekpraEntity, SwitchEntity):
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_weekly_limit_enabled"
-        self._attr_name = "Limite hebdomadaire active"
+        self._attr_translation_key = "weekly_limit_enabled"
 
     @property
     def is_on(self) -> bool:
@@ -212,7 +222,7 @@ class TimekpraMonthlyLimitToggle(TimekpraEntity, SwitchEntity):
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_monthly_limit_enabled"
-        self._attr_name = "Limite mensuelle active"
+        self._attr_translation_key = "monthly_limit_enabled"
 
     @property
     def is_on(self) -> bool:
@@ -242,8 +252,8 @@ class TimekpraMonthlyLimitToggle(TimekpraEntity, SwitchEntity):
 class TimekpraOverrideSwitch(TimekpraEntity, SwitchEntity):
     """Temporarily bypass ALL restrictions via the profile system.
 
-    ON  = selects the 'Déblocage temporaire' profile.
-    OFF = reverts to 'Personnalisé' profile.
+    ON  = selects the 'override' profile.
+    OFF = reverts to the 'custom' profile.
     """
 
     _attr_icon = "mdi:shield-off-outline"
@@ -251,7 +261,7 @@ class TimekpraOverrideSwitch(TimekpraEntity, SwitchEntity):
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_override"
-        self._attr_name = "Déblocage temporaire"
+        self._attr_translation_key = "override"
 
     @property
     def is_on(self) -> bool:

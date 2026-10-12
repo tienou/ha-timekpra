@@ -19,12 +19,15 @@ Contrôlez le temps d'écran de vos enfants directement depuis votre dashboard H
 - **Jours autorisés** : toggle par jour de la semaine
 - **Type de verrouillage** : lock / suspend / shutdown (menu déroulant)
 - **Suivi du temps inactif** : on/off
-- **Capteurs** : temps utilisé aujourd'hui et cette semaine
+- **Capteurs** : temps utilisé aujourd'hui et cette semaine, temps restant aujourd'hui (valeur calculée par Timekpr lui-même, bonus/pénalités compris)
 - **Statut** : ordinateur en ligne / hors ligne
 - **File d'attente offline** : les modifications sont mises en attente si l'ordinateur est éteint et appliquées automatiquement au rallumage (persistant entre redémarrages HA)
 - **Carte Lovelace intégrée** : carte personnalisée installée automatiquement avec contrôles interactifs
+- **Langues** : français, anglais et allemand (interface de l'intégration et carte, selon la langue de Home Assistant)
 
 ## Installation
+
+> Home Assistant **2024.11 ou plus récent** est requis.
 
 ### Via HACS (recommandé)
 
@@ -110,6 +113,8 @@ La carte est **chargée automatiquement** par l'intégration (servie via `/timek
 
 > Après installation ou mise à jour, faites un **rechargement forcé** du navigateur (Ctrl+Shift+R) si la carte n'apparaît pas immédiatement — c'est du cache frontend.
 
+> La carte est chargée comme **module frontend** : il est normal qu'elle n'apparaisse **pas** dans **Paramètres > Tableaux de bord > Ressources**. Si vous l'y aviez ajoutée à la main (`/local/timekpra-card.js`), vous pouvez supprimer cette ressource ; la laisser ne provoque pas d'erreur (la carte ne se déclare qu'une fois).
+
 ### Si la carte n'apparaît pas (secours manuel)
 
 Si l'auto-chargement ne fonctionne pas (mode Lovelace YAML, version HA particulière…), ajoutez la ressource **manuellement** :
@@ -146,7 +151,7 @@ resources:
 | **Number** | Limite Lundi…Dimanche, Limite hebdo, Limite mensuelle, Heure début/fin |
 | **Switch** | Jour autorisé Lundi…Dimanche, Compter le temps inactif, Limites quotidiennes on/off, Limite hebdo on/off, Limite mensuelle on/off, Déblocage temporaire |
 | **Select** | Action fin de temps (lock/suspend/shutdown), Profil actif |
-| **Sensor** | Temps utilisé aujourd'hui, Temps utilisé cette semaine, Ordinateur (en ligne/hors ligne), Modifications en attente |
+| **Sensor** | Temps utilisé aujourd'hui, Temps restant aujourd'hui, Temps utilisé cette semaine, Ordinateur (en ligne/hors ligne), Modifications en attente |
 
 ## Services
 
@@ -170,10 +175,26 @@ data:
 - `sudo` authentifié par mot de passe (`sudo -S`) ou sans mot de passe (`sudo -n` / `NOPASSWD`)
 - **Fallback VPN** : si l'IP locale est injoignable et une IP VPN est configurée, la connexion est tentée automatiquement sur l'IP VPN
 - Lecture de la config depuis `/var/lib/timekpr/config/timekpr.{user}.conf`
+- Temps utilisé / restant lus via `timekpra --userinfo` (valeurs de Timekpr, ajustements manuels compris ; repli sur le fichier `/var/lib/timekpr/work/{user}.time` si la commande n'est pas disponible)
 - Écriture via la CLI `timekpra` (ex: `timekpra --settimelimits`)
-- Rafraîchissement toutes les 5 minutes (configurable)
+- Rafraîchissement toutes les 5 minutes, sur une seule connexion SSH ; délais d'attente de 15 s (connexion) et 30 s (commande) pour ne jamais bloquer Home Assistant
 - File d'attente persistante pour les commandes quand la machine cible est hors ligne
 - Vérification du code retour : une commande qui échoue sur la machine (mauvais mot de passe sudo, règle NOPASSWD manquante, erreur `timekpra`…) est journalisée et signalée via « Modifications en attente » au lieu d'être silencieusement ignorée
+
+## Historique
+
+### v1.24.0
+
+- **Temps restant aujourd'hui juste** ([#3](https://github.com/tienou/ha-timekpra/issues/3)) : la valeur vient désormais de Timekpr (`timekpra --userinfo`) et tient compte des bonus/pénalités ajoutés ponctuellement. Exemple : 4 h autorisées, −1 h de pénalité, 20 min utilisées → 2h40 (au lieu de 3h40).
+- **Carte chargée automatiquement** ([#2](https://github.com/tienou/ha-timekpra/issues/2)) : enregistrement comme module frontend confirmé (dépendance `frontend` déclarée), sans ressource à ajouter à la main.
+- **Anglais et allemand** : noms d'entités, états, configuration, services et carte traduits (FR/EN/DE).
+- **Limites par jour** : quand un jour était désactivé, les limites des jours suivants étaient décalées d'un cran sur la machine (Timekpr les range dans l'ordre des jours autorisés). Corrigé à l'écriture et à la lecture.
+- **Déblocage temporaire** : débloque aussi un jour non autorisé ; le resélectionner pendant qu'il est actif n'écrase plus les réglages à restaurer.
+- **Fiabilité** : délais d'attente SSH, lecture de config ratée qui n'est plus prise pour une config « par défaut », compteurs remis à zéro après minuit même machine éteinte, plage horaire inversée refusée avec un message clair, login de l'enfant vérifié à la configuration.
+
+**À savoir en mettant à jour** : les identifiants internes changent pour permettre la traduction — l'état du capteur « Ordinateur » vaut `online`/`offline` (au lieu de `En ligne`/`Hors ligne`) et les profils prédéfinis ont pour identifiants `custom`, `override`, `school`, `holidays`, `grandparents` (l'affichage reste en français). Les profils enregistrés sont migrés automatiquement ; seules les automatisations qui testaient ces valeurs texte sont à adapter.
+
+Merci à **Markus Ullmann ([@Morjgus](https://github.com/Morjgus))** pour l'enregistrement de la carte ([#4](https://github.com/tienou/ha-timekpra/pull/4)) et l'internationalisation EN/DE/FR ([#5](https://github.com/tienou/ha-timekpra/pull/5)).
 
 ## Licence
 

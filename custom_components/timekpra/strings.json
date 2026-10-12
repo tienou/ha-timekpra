@@ -30,7 +30,8 @@
       "cannot_connect": "Cannot connect via SSH. Please check host, port, and credentials.",
       "password_required": "A password is required for password authentication.",
       "key_required": "A private key is required for key authentication.",
-      "invalid_key": "The private key could not be read. Check its format and passphrase."
+      "invalid_key": "The private key could not be read. Check its format and passphrase.",
+      "invalid_user": "Invalid login name: letters, digits, '_', '-' and '.' only, not starting with '-'."
     },
     "abort": {
       "already_configured": "This user is already configured."
@@ -66,7 +67,176 @@
       "cannot_connect": "Cannot connect via SSH. Please check host, port, and credentials.",
       "password_required": "A password is required for password authentication.",
       "key_required": "A private key is required for key authentication.",
-      "invalid_key": "The private key could not be read. Check its format and passphrase."
+      "invalid_key": "The private key could not be read. Check its format and passphrase.",
+      "invalid_user": "Invalid login name: letters, digits, '_', '-' and '.' only, not starting with '-'."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "time_spent_today": {
+        "name": "Time used today"
+      },
+      "time_remaining": {
+        "name": "Time remaining today"
+      },
+      "time_spent_week": {
+        "name": "Time used this week"
+      },
+      "computer": {
+        "name": "Computer",
+        "state": {
+          "online": "Online",
+          "offline": "Offline"
+        }
+      },
+      "pending": {
+        "name": "Pending changes"
+      }
+    },
+    "switch": {
+      "day_monday": {
+        "name": "Allowed day - Monday"
+      },
+      "day_tuesday": {
+        "name": "Allowed day - Tuesday"
+      },
+      "day_wednesday": {
+        "name": "Allowed day - Wednesday"
+      },
+      "day_thursday": {
+        "name": "Allowed day - Thursday"
+      },
+      "day_friday": {
+        "name": "Allowed day - Friday"
+      },
+      "day_saturday": {
+        "name": "Allowed day - Saturday"
+      },
+      "day_sunday": {
+        "name": "Allowed day - Sunday"
+      },
+      "track_inactive": {
+        "name": "Count idle time"
+      },
+      "daily_limit_enabled": {
+        "name": "Daily limits enabled"
+      },
+      "weekly_limit_enabled": {
+        "name": "Weekly limit enabled"
+      },
+      "monthly_limit_enabled": {
+        "name": "Monthly limit enabled"
+      },
+      "override": {
+        "name": "Temporary override"
+      }
+    },
+    "number": {
+      "limit_monday": {
+        "name": "Monday limit"
+      },
+      "limit_tuesday": {
+        "name": "Tuesday limit"
+      },
+      "limit_wednesday": {
+        "name": "Wednesday limit"
+      },
+      "limit_thursday": {
+        "name": "Thursday limit"
+      },
+      "limit_friday": {
+        "name": "Friday limit"
+      },
+      "limit_saturday": {
+        "name": "Saturday limit"
+      },
+      "limit_sunday": {
+        "name": "Sunday limit"
+      },
+      "limit_week": {
+        "name": "Weekly limit"
+      },
+      "limit_month": {
+        "name": "Monthly limit"
+      },
+      "hour_start": {
+        "name": "Start hour"
+      },
+      "minute_start": {
+        "name": "Start minute"
+      },
+      "hour_end": {
+        "name": "End hour"
+      },
+      "minute_end": {
+        "name": "End minute"
+      },
+      "notification_threshold": {
+        "name": "Notify before lock"
+      }
+    },
+    "select": {
+      "lockout_type": {
+        "name": "Action when time runs out",
+        "state": {
+          "lock": "Lock",
+          "suspend": "Suspend",
+          "shutdown": "Shut down"
+        }
+      },
+      "profile": {
+        "name": "Profile",
+        "state": {
+          "custom": "Custom",
+          "override": "Temporary override",
+          "school": "School",
+          "holidays": "Holidays",
+          "grandparents": "At grandparents'"
+        }
+      }
+    }
+  },
+  "services": {
+    "save_profile": {
+      "name": "Save profile",
+      "description": "Saves the current settings into a named profile.",
+      "fields": {
+        "name": {
+          "name": "Profile name",
+          "description": "Name of the profile to save (e.g. School, Holidays)."
+        },
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Config entry ID (optional if only one device is configured)."
+        }
+      }
+    },
+    "delete_profile": {
+      "name": "Delete profile",
+      "description": "Deletes a user profile.",
+      "fields": {
+        "name": {
+          "name": "Profile name",
+          "description": "Name of the profile to delete."
+        },
+        "entry_id": {
+          "name": "Entry ID",
+          "description": "Config entry ID (optional if only one device is configured)."
+        }
+      }
+    }
+  },
+  "selector": {
+    "auth_method": {
+      "options": {
+        "password": "Password",
+        "key": "SSH key"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_hour_range": {
+      "message": "Invalid allowed hours: the start ({start}) must be before the end ({end})."
     }
   }
 }

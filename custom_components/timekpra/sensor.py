@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -42,11 +42,11 @@ class TimekpraTimeSpentTodaySensor(TimekpraEntity, SensorEntity):
 
     _attr_icon = "mdi:timer-sand"
     _attr_native_unit_of_measurement = "min"
+    _attr_translation_key = "time_spent_today"
 
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_time_spent_today"
-        self._attr_name = "Temps utilis\u00e9 aujourd'hui"
 
     @property
     def native_value(self) -> int | None:
@@ -72,11 +72,11 @@ class TimekpraTimeRemainingSensor(TimekpraEntity, SensorEntity):
 
     _attr_icon = "mdi:timer-alert-outline"
     _attr_native_unit_of_measurement = "min"
+    _attr_translation_key = "time_remaining"
 
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_time_remaining"
-        self._attr_name = "Temps restant aujourd'hui"
 
     @property
     def native_value(self) -> int | None:
@@ -102,11 +102,11 @@ class TimekpraTimeSpentWeekSensor(TimekpraEntity, SensorEntity):
 
     _attr_icon = "mdi:calendar-clock"
     _attr_native_unit_of_measurement = "min"
+    _attr_translation_key = "time_spent_week"
 
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_time_spent_week"
-        self._attr_name = "Temps utilis\u00e9 cette semaine"
 
     @property
     def native_value(self) -> int | None:
@@ -134,17 +134,19 @@ class TimekpraOnlineSensor(TimekpraEntity, SensorEntity):
     """Shows whether the child's computer is reachable."""
 
     _attr_icon = "mdi:desktop-classic"
+    _attr_translation_key = "computer"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["online", "offline"]
 
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_online"
-        self._attr_name = "Ordinateur"
 
     @property
     def native_value(self) -> str:
         if self.coordinator.data.get("online"):
-            return "En ligne"
-        return "Hors ligne"
+            return "online"
+        return "offline"
 
     @property
     def icon(self) -> str:
@@ -158,11 +160,11 @@ class TimekpraPendingSensor(TimekpraEntity, SensorEntity):
 
     _attr_icon = "mdi:cloud-upload-outline"
     _attr_native_unit_of_measurement = "modification(s)"
+    _attr_translation_key = "pending"
 
     def __init__(self, coordinator, target_user, entry) -> None:
         super().__init__(coordinator, target_user)
         self._attr_unique_id = f"{entry.entry_id}_pending"
-        self._attr_name = "Modifications en attente"
 
     @property
     def native_value(self) -> int:
