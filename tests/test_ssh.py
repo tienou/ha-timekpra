@@ -48,10 +48,64 @@ def test_connect_kwargs_has_connect_timeout():
     assert kwargs["password"] == "pw"
 
 
-def test_sudo_password_is_quoted():
-    cmd = make(password="it's")._sudo("cat /x")
-    assert cmd == "echo 'it'\\''s' | sudo -S -p '' cat /x"
+def test_sudo_password_never_on_the_command_line():
+    cmd = make(password="it's secret")._sudo("cat /x")
+    assert cmd == "sudo -S -p '' cat /x"
+    assert "secret" not in cmd
     assert make(ssh_key="", sudo_password="")._sudo("ls") == "sudo -n ls"
+
+
+class _Stdin:
+    def __init__(self):
+        self.data = ""
+        self.eof = False
+
+    def write(self, data):
+        self.data += data
+
+    def write_eof(self):
+        self.eof = True
+
+
+class _Done:
+    async def read(self):
+        return ""
+
+
+def _proc_conn():
+    class Proc:
+        stdin = _Stdin()
+        stdout = _Done()
+        stderr = _Done()
+        returncode = 0
+
+        async def wait_closed(self):
+            return None
+
+    class Conn:
+        commands: list[str] = []
+
+        async def create_process(self, command):
+            Conn.commands.append(command)
+            return Proc()
+
+    return Conn(), Proc
+
+
+def test_sudo_password_is_sent_on_stdin():
+    ssh = make(sudo_password="it's secret")
+    conn, proc = _proc_conn()
+    run(ssh._run_on_conn(conn, ssh._sudo("timekpra --userinfo 'x'"), True))
+    assert conn.commands == ["sudo -S -p '' timekpra --userinfo 'x'"]
+    assert proc.stdin.data == "it's secret\n"
+    assert proc.stdin.eof
+
+
+def test_no_stdin_password_without_sudo():
+    ssh = make(sudo_password="pw")
+    conn, proc = _proc_conn()
+    run(ssh._run_on_conn(conn, "echo ok", False))
+    assert proc.stdin.data == ""
 
 
 def test_set_allowed_hours_command_and_validation():
