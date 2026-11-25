@@ -22,6 +22,9 @@ CONNECT_TIMEOUT = 15
 # not block the coordinator forever.
 COMMAND_TIMEOUT = 30
 
+# Prefix of a sudo call whose password is sent on stdin (see _sudo()).
+_SUDO_STDIN = "sudo -S -p ''"
+
 # Open session connection for the *current asyncio task* (see session()).
 # A ContextVar (not an instance attribute) so that two overlapping sessions
 # — e.g. the periodic refresh and a profile push running in a background
@@ -158,13 +161,15 @@ class TimekpraSSH:
     def _sudo(self, command: str) -> str:
         """Wrap a command with sudo.
 
-        Uses the sudo password via stdin when one is available, otherwise
-        falls back to non-interactive sudo (requires NOPASSWD on the host).
+        With a sudo password, ``sudo -S`` reads it from the channel's stdin,
+        which ``_run_on_conn`` feeds. The password is NEVER part of the
+        command line: that line is logged by asyncssh (INFO) in Home
+        Assistant's log and visible in the target machine's process list.
+        Without a password, non-interactive sudo (requires NOPASSWD).
         ``-p ''`` suppresses the prompt so it never leaks into stdout.
         """
         if self._sudo_password:
-            safe_pw = self._sudo_password.replace("'", "'\\''")
-            return f"echo '{safe_pw}' | sudo -S -p '' {command}"
+            return f"{_SUDO_STDIN} {command}"
         return f"sudo -n {command}"
 
     def _connect_kwargs(self) -> dict[str, Any]:
@@ -196,6 +201,11 @@ class TimekpraSSH:
         stdout/stderr/returncode as stable properties.
         """
         proc = await conn.create_process(command)
+        if self._sudo_password and command.startswith(_SUDO_STDIN):
+            # sudo -S reads the password from stdin (kept off the command
+            # line), then EOF so nothing downstream waits for more input.
+            proc.stdin.write(self._sudo_password + "\n")
+            proc.stdin.write_eof()
         try:
             async with asyncio.timeout(COMMAND_TIMEOUT):
                 stdout_data = await proc.stdout.read()

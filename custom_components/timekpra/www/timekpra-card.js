@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.24.0";
+const CARD_VERSION = "1.24.1";
 
 const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])

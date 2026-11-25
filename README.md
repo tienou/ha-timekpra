@@ -183,6 +183,10 @@ data:
 
 ## Historique
 
+### v1.24.1
+
+- **Sécurité — mot de passe sudo hors des journaux** : il n'est plus écrit dans la ligne de commande (`echo '…' | sudo -S`) mais envoyé sur l'entrée de `sudo -S`. Avant, il apparaissait en clair dans le journal de Home Assistant (asyncssh journalise chaque commande au niveau INFO) et dans la liste des processus de la machine de l'enfant. **Après la mise à jour, changez ce mot de passe** : il peut figurer dans d'anciens journaux.
+
 ### v1.24.0
 
 - **Temps restant aujourd'hui juste** ([#3](https://github.com/tienou/ha-timekpra/issues/3)) : la valeur vient désormais de Timekpr (`timekpra --userinfo`) et tient compte des bonus/pénalités ajoutés ponctuellement. Exemple : 4 h autorisées, −1 h de pénalité, 20 min utilisées → 2h40 (au lieu de 3h40).
