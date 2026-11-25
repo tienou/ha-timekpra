@@ -90,6 +90,7 @@ class TimekpraDaySwitch(TimekpraEntity, SwitchEntity):
         sorted_days = sorted(days)
         self.coordinator.data["allowed_days"] = sorted_days
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         # Timekpr stores the daily limits positionally on the allowed days:
         # changing the days without re-sending the limits shifted every
         # following day's limit by one.
@@ -126,11 +127,13 @@ class TimekpraTrackInactiveSwitch(TimekpraEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
         self.coordinator.data["track_inactive"] = True
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         await self.coordinator.async_apply("set_track_inactive", True)
 
     async def async_turn_off(self, **kwargs) -> None:
         self.coordinator.data["track_inactive"] = False
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         await self.coordinator.async_apply("set_track_inactive", False)
 
 
@@ -161,25 +164,44 @@ class TimekpraDailyLimitToggle(TimekpraEntity, SwitchEntity):
         current = self.coordinator.data.get("daily_limits", DEFAULT_DAILY_LIMITS)
         if any(v < UNLIMITED_DAILY for v in current):
             self.coordinator.saved_values["daily_limits"] = list(current)
+            # What was left today, to give back only that when re-enabled.
+            self.coordinator.saved_values["daily_toggle_time"] = (
+                self.coordinator.time_snapshot()
+            )
             await self.coordinator.async_save_state()
         unlimited = [UNLIMITED_DAILY] * 7
         self.coordinator.data["daily_limits"] = unlimited
         self.async_write_ha_state()
-        await self.coordinator.async_apply(
-            "set_time_limits", self.coordinator.timekpr_limits(unlimited)
-        )
-        # Force 24h de temps restant pour débloquer immédiatement
-        await self.coordinator.async_apply("set_time_left", "=", 86400)
+        await self.coordinator.async_mark_custom()
+        # 24 h left right away (unlocks a child whose time had run out).
+        await self.coordinator.async_apply_commands([
+            ("set_time_limits", self.coordinator.timekpr_limits(unlimited)),
+            ("set_time_left", "=", 86400),
+        ])
 
     async def async_turn_on(self, **kwargs) -> None:
         restored = self.coordinator.saved_values.get(
             "daily_limits", DEFAULT_DAILY_LIMITS
         )
-        self.coordinator.data["daily_limits"] = list(restored)
+        restored = list(restored)
+        self.coordinator.data["daily_limits"] = restored
         self.async_write_ha_state()
-        await self.coordinator.async_apply(
-            "set_time_limits", self.coordinator.timekpr_limits(list(restored))
+        await self.coordinator.async_mark_custom()
+        days = self.coordinator.data.get("allowed_days", [1, 2, 3, 4, 5, 6, 7])
+        cmds: list[tuple] = [
+            ("set_time_limits", self.coordinator.timekpr_limits(restored, days)),
+        ]
+        # Turning the limit off granted 24 h: without this the child kept
+        # them until midnight after the limit was turned back on.
+        value = self.coordinator.time_left_after_restore(
+            self.coordinator.saved_values.pop("daily_toggle_time", None),
+            restored,
+            days,
         )
+        if value is not None:
+            cmds.append(("set_time_left", "=", value))
+        await self.coordinator.async_save_state()
+        await self.coordinator.async_apply_commands(cmds)
 
 
 class TimekpraWeeklyLimitToggle(TimekpraEntity, SwitchEntity):
@@ -203,6 +225,7 @@ class TimekpraWeeklyLimitToggle(TimekpraEntity, SwitchEntity):
             await self.coordinator.async_save_state()
         self.coordinator.data["weekly_limit"] = UNLIMITED_WEEKLY
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         await self.coordinator.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -211,6 +234,7 @@ class TimekpraWeeklyLimitToggle(TimekpraEntity, SwitchEntity):
         )
         self.coordinator.data["weekly_limit"] = restored
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         await self.coordinator.async_apply("set_time_limit_week", restored)
 
 
@@ -235,6 +259,7 @@ class TimekpraMonthlyLimitToggle(TimekpraEntity, SwitchEntity):
             await self.coordinator.async_save_state()
         self.coordinator.data["monthly_limit"] = UNLIMITED_MONTHLY
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         await self.coordinator.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -243,6 +268,7 @@ class TimekpraMonthlyLimitToggle(TimekpraEntity, SwitchEntity):
         )
         self.coordinator.data["monthly_limit"] = restored
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         await self.coordinator.async_apply("set_time_limit_month", restored)
 
 

@@ -98,6 +98,7 @@ class TimekpraDailyLimit(TimekpraEntity, NumberEntity):
         limits[self._day_index] = int(value)
         self.coordinator.data["daily_limits"] = limits
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         # Re-aligned on the allowed days (Timekpr's positional format).
         await self.coordinator.async_apply(
             "set_time_limits", self.coordinator.timekpr_limits(limits)
@@ -131,6 +132,7 @@ class TimekpraWeeklyLimit(TimekpraEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         self.coordinator.data["weekly_limit"] = int(value)
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         await self.coordinator.async_apply("set_time_limit_week", int(value))
 
 
@@ -161,6 +163,7 @@ class TimekpraMonthlyLimit(TimekpraEntity, NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         self.coordinator.data["monthly_limit"] = int(value)
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         await self.coordinator.async_apply("set_time_limit_month", int(value))
 
 
@@ -197,6 +200,7 @@ async def _async_set_hours(
         )
     data[key] = int(value)
     entity.async_write_ha_state()
+    await entity.coordinator.async_mark_custom()
     await entity.coordinator.async_apply(
         "set_allowed_hours",
         hours["hour_start"], hours["hour_end"],
@@ -231,9 +235,11 @@ class TimekpraHourStart(TimekpraEntity, NumberEntity):
 class TimekpraMinuteStart(TimekpraEntity, NumberEntity):
     """Box for the start minute of the first allowed hour."""
 
+    # 0-59, step 1: Timekpr reads a full hour back as minute 59; the old
+    # 0-55 / step 5 range turned "+" on 59 into 55 (time taken away).
     _attr_native_min_value = 0
-    _attr_native_max_value = 55
-    _attr_native_step = 5
+    _attr_native_max_value = 59
+    _attr_native_step = 1
     _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = "min"
     _attr_icon = "mdi:clock-start"
@@ -279,9 +285,11 @@ class TimekpraHourEnd(TimekpraEntity, NumberEntity):
 class TimekpraMinuteEnd(TimekpraEntity, NumberEntity):
     """Box for the end minute of the last allowed hour."""
 
+    # 0-59, step 1: Timekpr reads a full hour back as minute 59; the old
+    # 0-55 / step 5 range turned "+" on 59 into 55 (time taken away).
     _attr_native_min_value = 0
-    _attr_native_max_value = 55
-    _attr_native_step = 5
+    _attr_native_max_value = 59
+    _attr_native_step = 1
     _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = "min"
     _attr_icon = "mdi:clock-end"

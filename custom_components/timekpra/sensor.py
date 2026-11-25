@@ -168,10 +168,11 @@ class TimekpraPendingSensor(TimekpraEntity, SensorEntity):
 
     @property
     def native_value(self) -> int:
-        return self.coordinator.data.get("pending_count", 0)
+        # Live count (updated as soon as a change is queued or sent).
+        return self.coordinator.pending_count
 
     @property
     def icon(self) -> str:
-        if self.coordinator.data.get("pending_count", 0) > 0:
+        if self.coordinator.pending_count > 0:
             return "mdi:cloud-sync"
         return "mdi:cloud-check"

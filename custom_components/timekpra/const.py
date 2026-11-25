@@ -29,7 +29,9 @@ DAYS = [
     {"key": "sunday", "name": "Dimanche", "number": 7},
 ]
 
-LOCKOUT_TYPES = ["lock", "suspend", "shutdown"]
+# Timekpr-nExT values (``--setlockouttype``). "suspendwake" needs a wake-up
+# hour range and is not offered here.
+LOCKOUT_TYPES = ["lock", "suspend", "terminate", "kill", "shutdown"]
 
 # Values that effectively mean "unlimited" in timekpr-next
 UNLIMITED_DAILY = 1440     # 24h in minutes

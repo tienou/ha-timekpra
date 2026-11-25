@@ -1,4 +1,4 @@
-const CARD_VERSION = "1.24.1";
+const CARD_VERSION = "1.25.0";
 
 const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
@@ -79,6 +79,15 @@ class TimekpraCard extends HTMLElement {
     for (const evt of ["pointerdown", "mousedown", "touchstart", "keydown", "keyup", "keypress", "click", "focusin"]) {
       this.addEventListener(evt, stop, true);
     }
+    // Values chosen with +/- but not sent yet (debounced), per entity.
+    this._pendingVals = {};
+    this._timers = {};
+    // Updates skipped while a field had the focus are applied when it leaves.
+    this.shadowRoot.addEventListener("focusout", () => {
+      if (!this._dirty) return;
+      this._dirty = false;
+      setTimeout(() => this._render(), 0);
+    });
   }
 
   setConfig(config) {
@@ -92,9 +101,12 @@ class TimekpraCard extends HTMLElement {
   set hass(hass) {
     const oldHass = this._hass;
     this._hass = hass;
-    // Skip re-render if an input inside the card is focused (user is typing)
-    if (this.shadowRoot && this.shadowRoot.activeElement &&
-        this.shadowRoot.activeElement.tagName === "INPUT") {
+    // Skip re-render while a field of the card has the focus (typing a
+    // profile name, or a drop-down open: re-rendering closed it). The skipped
+    // update is applied on focusout.
+    const active = this.shadowRoot && this.shadowRoot.activeElement;
+    if (active && (active.tagName === "INPUT" || active.tagName === "SELECT")) {
+      this._dirty = true;
       return;
     }
     // Skip re-render if relevant entity states haven't changed. The card's
@@ -143,8 +155,20 @@ class TimekpraCard extends HTMLElement {
   }
 
   _stateValue(entityId) {
+    if (entityId && entityId in this._pendingVals) {
+      return String(this._pendingVals[entityId]);
+    }
     const s = this._state(entityId);
-    return s ? s.state : "unavailable";
+    return s && s.state !== "unknown" ? s.state : "unavailable";
+  }
+
+  _notify(err) {
+    // Service errors (e.g. "start must be before end") are not shown by HA
+    // for a custom card: show them as a toast instead of failing silently.
+    const message = (err && (err.message || err.error || err.code)) || String(err);
+    this.dispatchEvent(new CustomEvent("hass-notification", {
+      detail: { message }, bubbles: true, composed: true,
+    }));
   }
 
   _t(key) {
@@ -165,36 +189,62 @@ class TimekpraCard extends HTMLElement {
     if (!state) return;
     this._hass.callService("switch", state.state === "on" ? "turn_off" : "turn_on", {
       entity_id: entityId,
-    });
+    }).catch((err) => this._notify(err));
   }
 
   _setNumber(entityId, value) {
-    this._hass.callService("number", "set_value", {
+    return this._hass.callService("number", "set_value", {
       entity_id: entityId,
       value: parseFloat(value),
     });
   }
 
+  // +/- : the value is shown at once and sent ONCE, 700 ms after the last
+  // click. Each click used to send its own command to the computer (two
+  // clicks = two SSH commands that could arrive in the wrong order), and two
+  // fast clicks computed from the same state lost one step.
   _adjustNumber(entityId, delta) {
     const state = this._state(entityId);
     if (!state) return;
-    const current = parseFloat(state.state);
-    if (isNaN(current)) return;
-    const min = state.attributes.min || 0;
-    const max = state.attributes.max || 1440;
-    const step = state.attributes.step || 1;
-    const newVal = Math.min(max, Math.max(min, current + delta));
-    this._setNumber(entityId, newVal);
+    const base = entityId in this._pendingVals
+      ? this._pendingVals[entityId]
+      : parseFloat(state.state);
+    if (isNaN(base)) return;
+    const min = Number(state.attributes.min ?? 0);
+    const max = Number(state.attributes.max ?? 1440);
+    let v = base + delta;
+    const stepAbs = Math.abs(delta);
+    // Snap to the button step (59 - 5 -> 55, not 54); the max stays reachable.
+    if (stepAbs > 1 && v < max) v = Math.round(v / stepAbs) * stepAbs;
+    v = Math.min(max, Math.max(min, v));
+    if (v === base) return;
+    this._pendingVals[entityId] = v;
+    this._render();
+    clearTimeout(this._timers[entityId]);
+    this._timers[entityId] = setTimeout(() => {
+      delete this._timers[entityId];
+      const value = this._pendingVals[entityId];
+      this._setNumber(entityId, value)
+        .catch((err) => this._notify(err))
+        .finally(() => {
+          // Keep a newer pending value if more clicks happened meanwhile.
+          if (this._pendingVals[entityId] === value && !this._timers[entityId]) {
+            delete this._pendingVals[entityId];
+          }
+          this._render();
+        });
+    }, 700);
   }
 
   _setSelect(entityId, option) {
     this._hass.callService("select", "select_option", {
       entity_id: entityId,
       option: option,
-    });
+    }).catch((err) => this._notify(err));
   }
 
   _fireEvent(entityId) {
+    if (!entityId || entityId === "undefined") return;
     const event = new Event("hass-more-info", { bubbles: true, composed: true });
     event.detail = { entityId };
     this.dispatchEvent(event);
@@ -204,14 +254,14 @@ class TimekpraCard extends HTMLElement {
     if (!name || !name.trim()) return;
     this._hass.callService("timekpra", "save_profile", { name: name.trim() }).then(() => {
       setTimeout(() => this._render(), 1000);
-    });
+    }).catch((err) => this._notify(err));
   }
 
   _deleteProfile(name) {
     if (!name || name === "custom") return;
     this._hass.callService("timekpra", "delete_profile", { name }).then(() => {
       setTimeout(() => this._render(), 1000);
-    });
+    }).catch((err) => this._notify(err));
   }
 
   _render() {
@@ -276,7 +326,7 @@ class TimekpraCard extends HTMLElement {
     const notifThresholdEid = E.notification_threshold;
     const notifThreshold = this._stateValue(notifThresholdEid);
 
-    const user = this.config.target_user;
+    const user = String(this.config.target_user);
     const title = this.config.title || `${this._t("default_title")} - ${user.charAt(0).toUpperCase() + user.slice(1)}`;
 
     // Build day toggles
@@ -293,7 +343,7 @@ class TimekpraCard extends HTMLElement {
         const eid = E[`limit_${d.key}`];
         const val = this._stateValue(eid);
         const numVal = parseInt(val);
-        const displayVal = val === "unavailable" ? "-" : (numVal >= 1440 ? this._t("unlimited") : `${val} min`);
+        const displayVal = esc(val === "unavailable" ? "-" : (numVal >= 1440 ? this._t("unlimited") : `${val} min`));
         return `<div class="limit-row">
           <span class="limit-label">${d.label}</span>
           <div class="limit-controls">
@@ -306,17 +356,19 @@ class TimekpraCard extends HTMLElement {
     }
 
     // Lockout options (labels reused from integration select translations)
-    const lockoutOptions = ["lock", "suspend", "shutdown"];
+    const lockoutState = this._state(E.lockout_type);
+    const lockoutOptions = (lockoutState && lockoutState.attributes.options) ||
+      ["lock", "suspend", "terminate", "kill", "shutdown"];
     const lockoutSelectId = E.lockout_type;
     const lockoutOptionsHtml = lockoutOptions.map((opt) =>
-      `<option value="${opt}" ${lockoutType === opt ? "selected" : ""}>${this._localizeOption("lockout_type", opt)}</option>`
+      `<option value="${esc(opt)}" ${lockoutType === opt ? "selected" : ""}>${esc(this._localizeOption("lockout_type", opt))}</option>`
     ).join("");
 
     // Format time
     const formatTime = (val) => {
       if (val === "unavailable" || val === "unknown" || val === null || val === "None") return "-";
       const n = parseInt(val);
-      if (isNaN(n)) return val;
+      if (isNaN(n)) return esc(val);
       const h = Math.floor(n / 60);
       const m = n % 60;
       return h > 0 ? `${h}h${m.toString().padStart(2, "0")}` : `${m}min`;
@@ -503,8 +555,8 @@ class TimekpraCard extends HTMLElement {
             <div class="tkp-header-info">
               <div class="tkp-header-title">${esc(title)}</div>
               <div class="tkp-header-status">
-                ${onlineLabel}
-                ${parseInt(pending) > 0 ? `<span class="tkp-pending-badge">${pending} ${this._t("pending")}</span>` : ""}
+                ${esc(onlineLabel)}
+                ${parseInt(pending) > 0 ? `<span class="tkp-pending-badge">${esc(pending)} ${esc(this._t("pending"))}</span>` : ""}
               </div>
               <div class="tkp-header-badges">
                 <span class="tkp-service-badge${isOnline ? "" : " offline"}">Timekpr-nExT</span>
@@ -575,13 +627,13 @@ class TimekpraCard extends HTMLElement {
               <div class="tkp-time-controls">
                 <div class="tkp-time-group">
                   <button class="tkp-btn" data-adjust="${hourStartEid}" data-delta="-1">-</button>
-                  <span class="tkp-time-value">${hourStart !== "unavailable" ? hourStart : "-"}</span>
+                  <span class="tkp-time-value">${hourStart !== "unavailable" ? esc(parseInt(hourStart)) : "-"}</span>
                   <button class="tkp-btn" data-adjust="${hourStartEid}" data-delta="1">+</button>
                 </div>
                 <span class="tkp-time-colon">:</span>
                 <div class="tkp-time-group">
                   <button class="tkp-btn" data-adjust="${minuteStartEid}" data-delta="-5">-</button>
-                  <span class="tkp-time-value">${minuteStart !== "unavailable" ? minuteStart.toString().padStart(2, "0") : "00"}</span>
+                  <span class="tkp-time-value">${minuteStart !== "unavailable" ? esc(String(parseInt(minuteStart)).padStart(2, "0")) : "-"}</span>
                   <button class="tkp-btn" data-adjust="${minuteStartEid}" data-delta="5">+</button>
                 </div>
               </div>
@@ -591,13 +643,13 @@ class TimekpraCard extends HTMLElement {
               <div class="tkp-time-controls">
                 <div class="tkp-time-group">
                   <button class="tkp-btn" data-adjust="${hourEndEid}" data-delta="-1">-</button>
-                  <span class="tkp-time-value">${hourEnd !== "unavailable" ? hourEnd : "-"}</span>
+                  <span class="tkp-time-value">${hourEnd !== "unavailable" ? esc(parseInt(hourEnd)) : "-"}</span>
                   <button class="tkp-btn" data-adjust="${hourEndEid}" data-delta="1">+</button>
                 </div>
                 <span class="tkp-time-colon">:</span>
                 <div class="tkp-time-group">
                   <button class="tkp-btn" data-adjust="${minuteEndEid}" data-delta="-5">-</button>
-                  <span class="tkp-time-value">${minuteEnd !== "unavailable" ? minuteEnd.toString().padStart(2, "0") : "59"}</span>
+                  <span class="tkp-time-value">${minuteEnd !== "unavailable" ? esc(String(parseInt(minuteEnd)).padStart(2, "0")) : "-"}</span>
                   <button class="tkp-btn" data-adjust="${minuteEndEid}" data-delta="5">+</button>
                 </div>
               </div>
@@ -625,7 +677,7 @@ class TimekpraCard extends HTMLElement {
               <span class="limit-label">${this._t("weekly")}</span>
               <div class="limit-controls">
                 <button class="tkp-btn" data-adjust="${weeklyLimitEid}" data-delta="-1">-</button>
-                <span class="limit-value" data-more-info="${weeklyLimitEid}">${parseInt(weeklyLimit) >= 168 ? this._t("unlimited") : weeklyLimit + "h"}</span>
+                <span class="limit-value" data-more-info="${weeklyLimitEid}">${esc(parseInt(weeklyLimit) >= 168 ? this._t("unlimited") : weeklyLimit + "h")}</span>
                 <button class="tkp-btn" data-adjust="${weeklyLimitEid}" data-delta="1">+</button>
               </div>
             </div>` : ""}
@@ -637,7 +689,7 @@ class TimekpraCard extends HTMLElement {
               <span class="limit-label">${this._t("monthly")}</span>
               <div class="limit-controls">
                 <button class="tkp-btn" data-adjust="${monthlyLimitEid}" data-delta="-1">-</button>
-                <span class="limit-value" data-more-info="${monthlyLimitEid}">${parseInt(monthlyLimit) >= 744 ? this._t("unlimited") : monthlyLimit + "h"}</span>
+                <span class="limit-value" data-more-info="${monthlyLimitEid}">${esc(parseInt(monthlyLimit) >= 744 ? this._t("unlimited") : monthlyLimit + "h")}</span>
                 <button class="tkp-btn" data-adjust="${monthlyLimitEid}" data-delta="1">+</button>
               </div>
             </div>` : ""}
@@ -660,7 +712,7 @@ class TimekpraCard extends HTMLElement {
               <span class="tkp-row-label">${this._t("alert_before_end")}</span>
               <div class="tkp-row-controls">
                 <button class="tkp-btn" data-adjust="${notifThresholdEid}" data-delta="-5">-</button>
-                <span class="tkp-row-value" data-more-info="${notifThresholdEid}">${notifThreshold !== "unavailable" ? (parseInt(notifThreshold) === 0 ? this._t("off") : notifThreshold + " min") : "-"}</span>
+                <span class="tkp-row-value" data-more-info="${notifThresholdEid}">${esc(notifThreshold !== "unavailable" ? (parseInt(notifThreshold) === 0 ? this._t("off") : notifThreshold + " min") : "-")}</span>
                 <button class="tkp-btn" data-adjust="${notifThresholdEid}" data-delta="5">+</button>
               </div>
             </div>
@@ -669,16 +721,31 @@ class TimekpraCard extends HTMLElement {
       </ha-card>
     `;
 
-    // Bind toggle events
+    // Bind toggle events (mouse + keyboard: they are plain divs)
     this.shadowRoot.querySelectorAll("[data-toggle]").forEach((el) => {
+      el.setAttribute("role", "switch");
+      el.setAttribute("tabindex", "0");
+      const st = this._state(el.dataset.toggle);
+      el.setAttribute("aria-checked", st && st.state === "on" ? "true" : "false");
       el.addEventListener("click", (e) => {
         e.stopPropagation();
         this._toggle(el.dataset.toggle);
+      });
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          this._toggle(el.dataset.toggle);
+        }
       });
     });
 
     // Bind +/- buttons
     this.shadowRoot.querySelectorAll("[data-adjust]").forEach((el) => {
+      const row = el.closest(".limit-row, .tkp-time-row, .tkp-row");
+      const label = row && row.querySelector(".limit-label, .tkp-row-label");
+      const delta = parseInt(el.dataset.delta);
+      el.setAttribute("aria-label",
+        `${label ? label.textContent.trim() : ""} ${delta > 0 ? "+" : ""}${delta}`.trim());
       el.addEventListener("click", (e) => {
         e.stopPropagation();
         this._adjustNumber(el.dataset.adjust, parseInt(el.dataset.delta));
@@ -722,13 +789,25 @@ class TimekpraCard extends HTMLElement {
       }
     }
 
+    // mousedown fires before the input loses focus (mouse); a keyboard
+    // activation only fires "click" with detail 0.
+    const onPress = (el, fn) => {
+      el.addEventListener("mousedown", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        fn();
+      });
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (e.detail === 0) fn();
+      });
+    };
+
     // Toggle "new profile" row
     const addToggleBtn = this.shadowRoot.querySelector("#tkp-profile-add-toggle");
     const newRow = this.shadowRoot.querySelector("#tkp-profile-new-row");
     if (addToggleBtn && newRow) {
-      addToggleBtn.addEventListener("mousedown", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
+      onPress(addToggleBtn, () => {
         this._showNewProfile = true;
         newRow.style.display = "flex";
         setTimeout(() => {
@@ -741,11 +820,11 @@ class TimekpraCard extends HTMLElement {
     // Cancel new profile
     const cancelBtn = this.shadowRoot.querySelector("#tkp-profile-add-cancel");
     if (cancelBtn && newRow) {
-      cancelBtn.addEventListener("mousedown", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
+      onPress(cancelBtn, () => {
         this._showNewProfile = false;
         this._profileInputValue = "";
+        const input = this.shadowRoot.querySelector("#tkp-profile-name");
+        if (input) input.blur();
         newRow.style.display = "none";
       });
     }
@@ -753,36 +832,38 @@ class TimekpraCard extends HTMLElement {
     // Bind profile save (use mousedown to fire BEFORE blur resets the input)
     const saveBtn = this.shadowRoot.querySelector("#tkp-profile-save");
     if (saveBtn) {
-      saveBtn.addEventListener("mousedown", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
+      const doSave = () => {
         const name = this._profileInputValue || (profileInput && profileInput.value) || "";
         if (name.trim()) {
           this._saveProfile(name.trim());
           this._profileInputValue = "";
           this._showNewProfile = false;
-          if (profileInput) profileInput.value = "";
+          if (profileInput) {
+            profileInput.value = "";
+            profileInput.blur();
+          }
           if (newRow) newRow.style.display = "none";
         }
-      });
+      };
+      onPress(saveBtn, doSave);
+      if (profileInput) {
+        profileInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") doSave();
+          if (e.key === "Escape" && cancelBtn) cancelBtn.click();
+        });
+      }
     }
 
     // Bind profile update (overwrite current profile with current settings)
     const updateBtn = this.shadowRoot.querySelector("#tkp-profile-update");
     if (updateBtn) {
-      updateBtn.addEventListener("mousedown", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        this._saveProfile(activeProfile);
-      });
+      onPress(updateBtn, () => this._saveProfile(activeProfile));
     }
 
     // Bind profile delete (mousedown to avoid event interception)
     const deleteBtn = this.shadowRoot.querySelector("#tkp-profile-delete");
     if (deleteBtn) {
-      deleteBtn.addEventListener("mousedown", (e) => {
-        e.stopPropagation();
-        e.preventDefault();
+      onPress(deleteBtn, () => {
         if (confirm(this._t("confirm_delete").replace("%s", this._localizeOption("profile", activeProfile)))) {
           this._deleteProfile(activeProfile);
         }
@@ -791,7 +872,8 @@ class TimekpraCard extends HTMLElement {
   }
 
   getCardSize() {
-    return 8;
+    // Rows of 50 px: header, profile, stats, days, hours, limits, settings.
+    return 14;
   }
 }
 
@@ -805,11 +887,22 @@ class TimekpraCardEditor extends HTMLElement {
 
   setConfig(config) {
     this._config = { ...config };
-    this._render();
+    if (!this.shadowRoot.querySelector("#target_user")) {
+      this._render();
+      return;
+    }
+    for (const field of ["target_user", "title"]) {
+      const input = this.shadowRoot.querySelector(`#${field}`);
+      const value = String(this._config[field] ?? "");
+      if (input && input.value !== value) input.value = value;
+    }
   }
 
   set hass(hass) {
+    const first = !this._hass;
     this._hass = hass;
+    // Labels depend on the language: render once it is known.
+    if (first && this._config) this._render();
   }
 
   _t(key) {

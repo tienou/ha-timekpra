@@ -1,6 +1,7 @@
 """Data update coordinator for Timekpra with offline command queue."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Any
@@ -9,6 +10,7 @@ import asyncssh
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceValidationError
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -33,6 +35,7 @@ from .timekpr_data import (
     is_valid_config,
     process_config,
     roll_over_stale_time,
+    settimeleft_value,
     time_values_from_control,
     time_values_from_userinfo,
 )
@@ -71,11 +74,29 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             always_update=False,
         )
         self.ssh = ssh
+        self.entry = entry
         self.target_user = entry.data[CONF_TARGET_USER]
-        # Store key based on host+user (stable across reinstalls)
-        store_key = f"{DOMAIN}_state_{entry.data[CONF_SSH_HOST]}_{self.target_user}"
-        self._store = Store(hass, STORAGE_VERSION, store_key)
+        # Keyed by the config entry: changing the host or the child in the
+        # options used to switch to a new, empty store (profiles, queue and
+        # pinned host key lost). The legacy host+user key is migrated once.
+        self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}_state_{entry.entry_id}")
+        self._legacy_store = Store(
+            hass,
+            STORAGE_VERSION,
+            f"{DOMAIN}_state_{entry.data[CONF_SSH_HOST]}_{self.target_user}",
+        )
+        # Serialises every command sent to the machine (user actions, profile
+        # pushes, queue replay): concurrent connections could otherwise land
+        # out of order (e.g. 23[00-15] arriving after 23[00-20]).
+        self._write_lock = asyncio.Lock()
+        # Bumped on every user change: a refresh that started before a change
+        # must not overwrite it with the config it read.
+        self._write_gen = 0
         self._pending: dict[str, list] = {}
+        # Day a queued command was issued for, for day-bound commands
+        # (set_time_left): replayed on another day it would be wrong.
+        self._pending_day: dict[str, str] = {}
+        self._gap_warned = False
         self.saved_values: dict[str, Any] = {}
         self._last_known_data: dict[str, Any] | None = None
 
@@ -89,8 +110,15 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_load_pending(self) -> None:
         """Load state from disk: pending commands, saved values, last data."""
         raw = await self._store.async_load()
+        if raw is None:
+            raw = await self._legacy_store.async_load()
+            if isinstance(raw, dict):
+                _LOGGER.info("Migrating stored state to the config-entry key")
+                await self._store.async_save(raw)
+                await self._legacy_store.async_remove()
         if isinstance(raw, dict):
             self._pending = raw.get("pending", {})
+            self._pending_day = raw.get("pending_day", {})
             self.saved_values = raw.get("saved_values", {})
             self._last_known_data = raw.get("last_known_data")
 
@@ -156,69 +184,124 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Persist everything to disk."""
         await self._store.async_save({
             "pending": dict(self._pending),
+            "pending_day": dict(self._pending_day),
             "saved_values": dict(self.saved_values),
             "last_known_data": self._last_known_data,
         })
 
-    async def async_apply(self, method: str, *args: Any) -> None:
+    async def _queue(self, method: str, full_args: list) -> None:
+        """Keep a command for later (last-write-wins per setter)."""
+        self._pending[method] = full_args
+        if method == "set_time_left":
+            self._pending_day[method] = dt_util.now().date().isoformat()
+        else:
+            self._pending_day.pop(method, None)
+        if self.data:
+            self.data["pending_count"] = self.pending_count
+            # Persist current in-memory data so changes survive HA restart
+            self._last_known_data = dict(self.data)
+        await self._save_state()
+        # The "pending changes" sensor / card update now, not at next refresh.
+        self.async_update_listeners()
+
+    async def _unqueue(self, method: str) -> None:
+        if method in self._pending:
+            del self._pending[method]
+            self._pending_day.pop(method, None)
+            if self.data:
+                self.data["pending_count"] = self.pending_count
+            await self._save_state()
+            self.async_update_listeners()
+
+    async def async_apply(
+        self, method: str, *args: Any, connected: bool = True
+    ) -> None:
         """Execute a timekpra setter, queuing it if the machine is offline.
 
         Only the latest call per method is kept (last-write-wins).
-        ``target_user`` is prepended automatically.
+        ``target_user`` is prepended automatically. ``connected=False`` (the
+        batch connection could not be opened) queues without retrying: each
+        retry costs up to 2 x CONNECT_TIMEOUT, minutes for a whole profile.
         """
+        self._write_gen += 1
         full_args: list = [self.target_user, *args]
+        if not connected:
+            _LOGGER.info("Machine offline - queuing %s for later", method)
+            await self._queue(method, full_args)
+            return
         try:
-            await getattr(self.ssh, method)(*full_args)
+            async with self._write_lock:
+                await getattr(self.ssh, method)(*full_args)
             # Success – remove from queue if it was there
-            if method in self._pending:
-                del self._pending[method]
-                await self._save_state()
+            await self._unqueue(method)
         except TimekpraCommandError as err:
             # Reached the machine but the command failed (wrong sudo password,
             # missing NOPASSWD rule, or a timekpra error). Never treat this as
             # success: keep it queued so the "pending" sensor flags that the
             # change did NOT take effect, and surface the reason in the log.
             _LOGGER.error("Command %s failed on the machine: %s", method, err)
-            self._pending[method] = full_args
-            if self.data:
-                self._last_known_data = dict(self.data)
-            await self._save_state()
+            await self._queue(method, full_args)
         except asyncssh.PermissionDenied as err:
-            # Authentication failure (bad password/key): retrying won't help,
-            # so don't queue it forever — surface it instead.
+            # Bad password/key: queue it (the change is NOT applied, the
+            # pending counter shows it); the next refresh starts the
+            # re-authentication flow.
             _LOGGER.error(
                 "SSH authentication failed running %s (check credentials): %s",
                 method, err,
             )
+            await self._queue(method, full_args)
         except (OSError, asyncssh.Error):
             _LOGGER.info("Machine offline - queuing %s for later", method)
-            self._pending[method] = full_args
-            # Persist current in-memory data so changes survive HA restart
-            if self.data:
-                self._last_known_data = dict(self.data)
-            await self._save_state()
+            await self._queue(method, full_args)
         except ValueError as err:
             # Invalid value (e.g. empty hour range): replaying it later
             # would fail the same way, so never queue it.
             _LOGGER.error("Refusing invalid %s: %s", method, err)
         except Exception:
             _LOGGER.exception("Unexpected error running %s", method)
-            self._pending[method] = full_args
-            if self.data:
-                self._last_known_data = dict(self.data)
-            await self._save_state()
+            await self._queue(method, full_args)
+
+    async def _apply_batch(self, commands: list[tuple]) -> None:
+        """Send several setters over ONE connection, in order.
+
+        If the connection cannot be opened, every command is queued at once.
+        """
+        async with self.ssh.session() as connected:
+            for method, *args in commands:
+                await self.async_apply(method, *args, connected=connected)
+
+    async def async_apply_commands(self, commands: list[tuple]) -> None:
+        """Public: several setters over one connection (switch entities)."""
+        await self._apply_batch(commands)
+
+    def _run_in_background(self, coro: Any, name: str) -> None:
+        """Background push tied to the entry: cancelled on unload/reload."""
+        self.entry.async_create_background_task(self.hass, coro, name)
 
     async def _flush_pending(self) -> None:
         """Replay every queued command. Stops on first connection error."""
         if not self._pending:
             return
         flushed: list[tuple[str, Any]] = []
+        today = dt_util.now().date().isoformat()
         # Iterate over a snapshot: a user action (async_apply) may add or
-        # remove queued commands while we await the SSH round-trips; mutating
-        # the dict during iteration raised RuntimeError and failed the refresh.
+        # remove queued commands while we await the SSH round-trips.
         for method, args in list(self._pending.items()):
+            if self._pending.get(method) is not args:
+                # Replaced or already sent by a newer user action meanwhile:
+                # replaying this older value would overwrite the newer one.
+                continue
+            day = self._pending_day.get(method)
+            if day is not None and day != today:
+                # e.g. "= today's limit" queued on Sunday, replayed Monday.
+                _LOGGER.info("Dropping %s queued on %s (day changed)", method, day)
+                flushed.append((method, args))
+                continue
             try:
-                await getattr(self.ssh, method)(*args)
+                async with self._write_lock:
+                    if self._pending.get(method) is not args:
+                        continue
+                    await getattr(self.ssh, method)(*args)
                 flushed.append((method, args))
                 _LOGGER.info("Flushed pending command: %s", method)
             except (OSError, asyncssh.Error):
@@ -238,6 +321,7 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # same setter during the flush must survive.
                 if self._pending.get(m) is args:
                     del self._pending[m]
+                    self._pending_day.pop(m, None)
             await self._save_state()
 
     async def async_save_state(self) -> None:
@@ -265,11 +349,10 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self, allowed_days: list[int], daily_limits: list[int]
     ) -> None:
         """Push allowed days, then the limits re-aligned on those days."""
-        async with self.ssh.session():
-            await self.async_apply("set_allowed_days", list(allowed_days))
-            await self.async_apply(
-                "set_time_limits", self.timekpr_limits(daily_limits, allowed_days)
-            )
+        await self._apply_batch([
+            ("set_allowed_days", list(allowed_days)),
+            ("set_time_limits", self.timekpr_limits(daily_limits, allowed_days)),
+        ])
 
     # ── Profiles ───────────────────────────────────────────────────
 
@@ -308,8 +391,11 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Save current settings as a named profile."""
         if name in (PROFILE_OVERRIDE, PROFILE_CUSTOM):
             # "custom" too: it would appear twice in the select options.
-            _LOGGER.warning("Cannot save over built-in profile: %s", name)
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="reserved_profile",
+                translation_placeholders={"name": name},
+            )
         if not self.data:
             return
         snapshot = {k: self.data[k] for k in self._PROFILE_KEYS if k in self.data}
@@ -331,8 +417,17 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_delete_profile(self, name: str) -> None:
         """Delete a profile (cannot delete the override or custom profile)."""
         if name in (PROFILE_OVERRIDE, PROFILE_CUSTOM):
-            _LOGGER.warning("Cannot delete built-in profile: %s", name)
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="reserved_profile",
+                translation_placeholders={"name": name},
+            )
+        if name not in self.profiles:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="profile_not_found",
+                translation_placeholders={"name": name},
+            )
         user_profiles = self.saved_values.get("profiles", {})
         if name in user_profiles:
             del user_profiles[name]
@@ -372,6 +467,62 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         current_days = sorted(data.get("allowed_days", ALL_DAYS))
         if current_days != ALL_DAYS:
             self.saved_values["override_days"] = current_days
+        self.saved_values["override_time"] = self.time_snapshot()
+
+    def time_snapshot(self) -> dict[str, Any]:
+        """Today's usage / time left before limits are lifted (override, daily
+        toggle), to give back only what was left when they come back."""
+        data = self.data or {}
+        return {
+            "date": dt_util.now().date().isoformat(),
+            "remaining": data.get("time_remaining"),
+            "spent": data.get("time_spent_today"),
+        }
+
+    def time_left_after_restore(
+        self,
+        snapshot: dict[str, Any] | None,
+        daily_limits: list[int],
+        allowed_days: list[int],
+    ) -> int | None:
+        """``--settimeleft '='`` value that re-applies today's limit.
+
+        Lifting the limits had granted a full day (``= 86400`` resets the
+        consumed balance): without this the child got today's whole limit
+        again. Same day as the snapshot: time left then, minus what was used
+        since. Otherwise: today's limit minus today's usage.
+        """
+        now = dt_util.now()
+        data = self.data or {}
+        spent_now = data.get("time_spent_today")
+        limit_s = None
+        if now.weekday() < len(daily_limits):
+            limit_s = int(daily_limits[now.weekday()]) * 60
+        remaining: int | None = None
+        snap = snapshot or {}
+        if (
+            snap.get("date") == now.date().isoformat()
+            and snap.get("remaining") is not None
+        ):
+            used_since = 0
+            if spent_now is not None and snap.get("spent") is not None:
+                used_since = max(0, int(spent_now) - int(snap["spent"]))
+            remaining = int(snap["remaining"]) - used_since
+        elif limit_s is not None:
+            remaining = limit_s - int(spent_now or 0)
+        if remaining is None:
+            return None
+        return settimeleft_value(
+            max(0, remaining), daily_limits, allowed_days, now.weekday()
+        )
+
+    async def async_mark_custom(self) -> None:
+        """A manual change no longer matches the selected profile."""
+        if self.active_profile in (PROFILE_CUSTOM, PROFILE_OVERRIDE):
+            return
+        self.saved_values["active_profile"] = PROFILE_CUSTOM
+        await self._save_state()
+        self.async_update_listeners()
 
     def _consume_override_snapshot(self) -> dict[str, Any]:
         """Pop the pre-override settings to restore when the override ends.
@@ -400,51 +551,68 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             restore["allowed_days"] = list(days)
         return restore
 
-    async def _push_restore(self, data: dict[str, Any]) -> None:
-        """Re-apply restored settings to timekpra after an override ends."""
-        async with self.ssh.session():  # one SSH connection for the whole batch
-            days = data.get("allowed_days", ALL_DAYS)
-            await self.async_apply("set_allowed_days", list(days))
-            await self.async_apply(
+    def _restore_commands(
+        self, data: dict[str, Any], time_snapshot: dict[str, Any] | None
+    ) -> list[tuple]:
+        """Commands re-applying ``data`` after the limits were lifted."""
+        days = list(data.get("allowed_days", ALL_DAYS))
+        daily = list(data.get("daily_limits", [60] * 7))
+        cmds: list[tuple] = [
+            ("set_allowed_days", days),
+            (
                 "set_allowed_hours",
                 data.get("hour_start", 0),
                 data.get("hour_end", 23),
                 data.get("minute_start", 0),
                 data.get("minute_end", 59),
-            )
-            await self.async_apply(
-                "set_time_limits",
-                self.timekpr_limits(list(data.get("daily_limits", [60] * 7)), days),
-            )
-            await self.async_apply("set_time_limit_week", data.get("weekly_limit", 0))
-            await self.async_apply("set_time_limit_month", data.get("monthly_limit", 0))
-            # The override had granted a full day (set_time_left = 86400). Clamp
-            # today's remaining time back to the restored daily limit so the
-            # machine is re-enforced now instead of staying unlocked until midnight.
-            daily = data.get("daily_limits", [])
-            today = dt_util.now().weekday()
-            if today < len(daily):
-                await self.async_apply("set_time_left", "=", int(daily[today]) * 60)
+            ),
+            ("set_time_limits", self.timekpr_limits(daily, days)),
+            ("set_time_limit_week", data.get("weekly_limit", 0)),
+            ("set_time_limit_month", data.get("monthly_limit", 0)),
+        ]
+        # The override had granted a full day (= 86400 resets the consumed
+        # balance): give back only what was left, not today's whole limit.
+        value = self.time_left_after_restore(time_snapshot, daily, days)
+        if value is not None:
+            cmds.append(("set_time_left", "=", value))
+        return cmds
+
+    def _clear_override(self) -> dict[str, Any] | None:
+        """Forget the override snapshot; returns its time snapshot if any."""
+        was_active = self.saved_values.get("override_active")
+        self.saved_values["override_active"] = False
+        for key in (
+            "override_hours", "override_daily", "override_weekly",
+            "override_monthly", "override_days",
+        ):
+            self.saved_values.pop(key, None)
+        snap = self.saved_values.pop("override_time", None)
+        return snap if was_active else None
 
     async def async_apply_profile(self, name: str) -> None:
         """Load a profile and apply all its settings to timekpra."""
         if name == PROFILE_CUSTOM:
             self.saved_values["active_profile"] = PROFILE_CUSTOM
-            self.saved_values["override_active"] = False
 
             # If a temporary override was active, restore the settings saved
             # before it. Without this, turning the override OFF would silently
             # leave the machine unrestricted (issue #1).
+            was_active = self.saved_values.get("override_active")
             restore = self._consume_override_snapshot() if self.data else {}
-            if restore:
+            time_snap = self.saved_values.pop("override_time", None)
+            self.saved_values["override_active"] = False
+            if self.data and (restore or was_active):
                 data = self.data
                 for key, val in restore.items():
                     data[key] = list(val) if isinstance(val, list) else val
                 await self._save_state()
                 # Update the UI immediately, push to the machine in background.
                 self.async_set_updated_data(data)
-                self.hass.async_create_task(self._push_restore(dict(data)))
-                _LOGGER.info("Override OFF — restored previous limits")
+                self._run_in_background(
+                    self._apply_batch(self._restore_commands(dict(data), time_snap)),
+                    "timekpra_restore",
+                )
+                _LOGGER.info("Override OFF - restored previous limits")
                 return
 
             await self._save_state()
@@ -460,16 +628,15 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not data:
             return
 
-        self.saved_values["active_profile"] = name
-
         if name == PROFILE_OVERRIDE:
-            # ── override: save current state, set everything unlimited
+            # -- override: save current state, set everything unlimited
             # Selecting it again while already active must NOT re-snapshot:
             # the current values are then the unlimited ones, and the real
             # pre-override settings would be lost (hours restored as 0h-23h59).
             if not self.saved_values.get("override_active"):
                 self._snapshot_before_override(data)
             self.saved_values["override_active"] = True
+            self.saved_values["active_profile"] = name
             await self._save_state()
 
             data["hour_start"] = 0
@@ -484,32 +651,32 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Update UI immediately, then push SSH commands in background
             self.async_set_updated_data(data)
             _LOGGER.info("Applied profile: %s (override ON)", name)
-
-            async def _push_override():
-                async with self.ssh.session():  # one SSH connection for the batch
-                    await self.async_apply("set_allowed_days", list(ALL_DAYS))
-                    await self.async_apply("set_allowed_hours", 0, 23, 0, 59)
-                    await self.async_apply("set_time_limits", [UNLIMITED_DAILY] * 7)
-                    await self.async_apply("set_time_limit_week", UNLIMITED_WEEKLY)
-                    await self.async_apply("set_time_limit_month", UNLIMITED_MONTHLY)
-                    await self.async_apply("set_time_left", "=", 86400)
-
-            self.hass.async_create_task(_push_override())
+            self._run_in_background(
+                self._apply_batch([
+                    ("set_allowed_days", list(ALL_DAYS)),
+                    ("set_allowed_hours", 0, 23, 0, 59),
+                    ("set_time_limits", [UNLIMITED_DAILY] * 7),
+                    ("set_time_limit_week", UNLIMITED_WEEKLY),
+                    ("set_time_limit_month", UNLIMITED_MONTHLY),
+                    ("set_time_left", "=", 86400),
+                ]),
+                "timekpra_override",
+            )
             return
 
-        # ── Normal profile ─────────────────────────────────────────
+        # -- Normal profile
         profile = self.profiles.get(name)
         if not profile:
-            _LOGGER.warning("Profile not found: %s", name)
-            return
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="profile_not_found",
+                translation_placeholders={"name": name},
+            )
 
-        # Disable override if it was active
-        self.saved_values["override_active"] = False
-        self.saved_values.pop("override_hours", None)
-        self.saved_values.pop("override_daily", None)
-        self.saved_values.pop("override_weekly", None)
-        self.saved_values.pop("override_monthly", None)
-        self.saved_values.pop("override_days", None)
+        self.saved_values["active_profile"] = name
+        # Leaving the override for a profile must also take back the full
+        # day it granted (it used to stay until midnight).
+        time_snap = self._clear_override()
         await self._save_state()
 
         # Apply all profile values to coordinator data
@@ -525,54 +692,42 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.info("Applied profile: %s", name)
 
         days = list(profile.get("allowed_days", data.get("allowed_days", ALL_DAYS)))
-
-        async def _push_profile():
-            async with self.ssh.session():  # one SSH connection for all 7 cmds
-                await self.async_apply("set_allowed_days", days)
-                await self.async_apply(
-                    "set_allowed_hours",
-                    profile.get("hour_start", 0),
-                    profile.get("hour_end", 23),
-                    profile.get("minute_start", 0),
-                    profile.get("minute_end", 59),
-                )
-                await self.async_apply(
-                    "set_time_limits",
-                    self.timekpr_limits(
-                        list(profile.get("daily_limits", [60] * 7)), days
-                    ),
-                )
-                await self.async_apply(
-                    "set_time_limit_week",
-                    profile.get("weekly_limit", 9),
-                )
-                await self.async_apply(
-                    "set_time_limit_month",
-                    profile.get("monthly_limit", 40),
-                )
-                await self.async_apply(
-                    "set_track_inactive",
-                    profile.get("track_inactive", False),
-                )
-                await self.async_apply(
-                    "set_lockout_type",
-                    profile.get("lockout_type", "lock"),
-                )
-
-        self.hass.async_create_task(_push_profile())
+        daily = list(profile.get("daily_limits", [60] * 7))
+        cmds: list[tuple] = [
+            ("set_allowed_days", days),
+            (
+                "set_allowed_hours",
+                profile.get("hour_start", 0),
+                profile.get("hour_end", 23),
+                profile.get("minute_start", 0),
+                profile.get("minute_end", 59),
+            ),
+            ("set_time_limits", self.timekpr_limits(daily, days)),
+            ("set_time_limit_week", profile.get("weekly_limit", 9)),
+            ("set_time_limit_month", profile.get("monthly_limit", 40)),
+            ("set_track_inactive", profile.get("track_inactive", False)),
+            ("set_lockout_type", profile.get("lockout_type", "lock")),
+        ]
+        if time_snap is not None:
+            value = self.time_left_after_restore(time_snap, daily, days)
+            if value is not None:
+                cmds.append(("set_time_left", "=", value))
+        self._run_in_background(self._apply_batch(cmds), "timekpra_profile")
 
     # ── Coordinator refresh ────────────────────────────────────────
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Pull config and time counters from the remote machine.
 
-        Never raises so the integration stays loaded even when the
+        Only raises ConfigEntryAuthFailed (wrong credentials), so the
+        integration stays loaded even when the
         child's computer is turned off.
         """
         online = False
         raw_config: dict[str, str] | None = None
         time_data: dict[str, Any] = {}
         previous = self.data or self._last_known_data or {}
+        write_gen = self._write_gen
 
         # One SSH connection for the whole refresh (flush + reads).
         async with self.ssh.session() as connected:
@@ -583,6 +738,10 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # 2. Try to read current config
                 try:
                     raw_config = await self.ssh.get_config(self.target_user)
+                except TimekpraCommandError as err:
+                    # The machine answered but sudo / cat failed (e.g. wrong
+                    # sudo password): say so instead of "offline" silently.
+                    _LOGGER.warning("Cannot read the Timekpr config: %s", err)
                 except Exception:  # noqa: BLE001
                     _LOGGER.debug("Cannot reach machine for config read")
                 if not is_valid_config(raw_config):
@@ -594,10 +753,34 @@ class TimekpraCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     time_data = await self._async_read_time(
                         process_config(raw_config, previous.get("daily_limits"))
                     )
+            elif self.ssh.auth_failed:
+                # Wrong password / key: retrying forever would only show
+                # "offline". Start Home Assistant's re-authentication flow.
+                raise ConfigEntryAuthFailed(
+                    f"SSH authentication refused for {self.target_user}"
+                )
 
         # 4. Build data (priority: live > previous > stored > defaults)
         if raw_config is not None:
             data = process_config(raw_config, previous.get("daily_limits"))
+            if self._write_gen != write_gen and self.data:
+                # A change was made while this refresh was reading: the file
+                # may predate it. Keep the settings shown (they are being
+                # pushed); the next refresh reads the applied values.
+                for key in self._PROFILE_KEYS:
+                    if key in self.data:
+                        data[key] = self.data[key]
+            if data.get("hours_gap") and not self._gap_warned:
+                self._gap_warned = True
+                _LOGGER.warning(
+                    "Allowed hours of %s on the machine are not one continuous "
+                    "range (%s): Home Assistant shows them as %s:%02d-%s:%02d "
+                    "and changing them will write that single range",
+                    self.target_user,
+                    raw_config.get("ALLOWED_HOURS_ALL", "?"),
+                    data["hour_start"], data["minute_start"],
+                    data["hour_end"], data["minute_end"],
+                )
         elif self.data:
             # Still in memory from a previous refresh
             data = dict(self.data)
