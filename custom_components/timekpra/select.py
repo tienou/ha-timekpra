@@ -47,11 +47,14 @@ class TimekpraLockoutType(TimekpraEntity, SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        return self.coordinator.data.get("lockout_type", "lock")
+        value = self.coordinator.data.get("lockout_type", "lock")
+        # e.g. "suspendwake;7;18" set from the Timekpr UI: not modelled.
+        return value if value in LOCKOUT_TYPES else None
 
     async def async_select_option(self, option: str) -> None:
         self.coordinator.data["lockout_type"] = option
         self.async_write_ha_state()
+        await self.coordinator.async_mark_custom()
         await self.coordinator.async_apply("set_lockout_type", option)
 
 

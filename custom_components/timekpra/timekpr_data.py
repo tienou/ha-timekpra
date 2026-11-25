@@ -139,6 +139,46 @@ def align_limits_for_timekpr(
     return out
 
 
+def settimeleft_value(
+    remaining_s: int,
+    daily_minutes: list[int],
+    allowed_days: list[int],
+    weekday: int,
+) -> int | None:
+    """Value to send with ``timekpra --settimeleft '='`` so that the user ends
+    up with ``remaining_s`` seconds left today. None = nothing to send.
+
+    Upstream (``configprocessor.checkAndSetTimeLeft``): ``=`` stores
+    ``TIME_SPENT_BALANCE = L_idx - value`` where ``L_idx`` is
+    ``LIMITS_PER_WEEKDAYS[weekday]`` (index by day of week), while the daemon
+    computes the time left with the limit of today's *position among the
+    allowed days* (``L_true``). Time left = ``L_true - balance``, hence
+    ``value = remaining + L_idx - L_true``. Both limits come from the list we
+    send (``align_limits_for_timekpr``). ``weekday``: 0 = Monday.
+    """
+    days = sorted({d for d in allowed_days if 1 <= d <= 7})
+    if weekday + 1 not in days or not 0 <= weekday <= 6:
+        return None  # day not allowed: no time anyway
+    daily = [int(v) for v in daily_minutes][:7]
+    while len(daily) < 7:
+        daily.append(DEFAULT_DAILY_MINUTES)
+    sent = align_limits_for_timekpr(daily, days)
+    l_idx = sent[weekday] * 60
+    l_true = daily[weekday] * 60
+    remaining = max(0, min(int(remaining_s), l_true))
+    return max(0, remaining + l_idx - l_true)
+
+
+def hours_have_gaps(raw_hours: str) -> bool:
+    """True when the allowed hours are not one continuous range
+    (e.g. ``7;8;17;18``): HA only models a single start/end range."""
+    entries = parse_hour_entries(raw_hours)
+    for (h1, _, me1), (h2, ms2, _) in zip(entries, entries[1:]):
+        if h2 != h1 + 1 or me1 < 59 or ms2 > 0:
+            return True
+    return False
+
+
 def process_config(
     raw: dict[str, str], previous_daily: list[int] | None = None
 ) -> dict[str, Any]:
@@ -157,7 +197,9 @@ def process_config(
     data["hour_start"] = min(hours) if hours else 0
     data["hour_end"] = max(hours) if hours else 23
     data["minute_start"] = hour_entries[0][1] if hour_entries else 0
-    data["minute_end"] = hour_entries[-1][2] if hour_entries else 59
+    # Timekpr may write a full hour as "[00-60]": the entity range is 0-59.
+    data["minute_end"] = min(hour_entries[-1][2], 59) if hour_entries else 59
+    data["hours_gap"] = hours_have_gaps(hours_raw)
 
     data["daily_limits"] = daily_limits_from_config(
         raw, data["allowed_days"], previous_daily

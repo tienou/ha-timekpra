@@ -228,3 +228,45 @@ def test_roll_over_stale_time_after_midnight_offline():
     before = dict(data)
     td.roll_over_stale_time(data, WEDNESDAY)  # same day: untouched
     assert data == before
+
+
+# -- settimeleft '=' (configprocessor.checkAndSetTimeLeft) -------------------
+
+
+def _left_after(value, daily, days, weekday):
+    """Simulate the daemon: balance = L_idx - value, left = L_true - balance."""
+    sent = td.align_limits_for_timekpr(daily, days)
+    balance = sent[weekday] * 60 - value
+    return daily[weekday] * 60 - balance
+
+
+def test_settimeleft_all_days_is_plain_remaining():
+    daily = [60, 60, 60, 60, 60, 120, 120]
+    assert td.settimeleft_value(1800, daily, td.ALL_DAYS, 0) == 1800
+    assert _left_after(1800, daily, td.ALL_DAYS, 0) == 1800
+
+
+def test_settimeleft_compensates_a_disabled_day():
+    # Wednesday off, Thursday (60 min) today, Friday 120 min: the CLI reads
+    # the limit at index 3 (= Friday after alignment), the daemon Thursday.
+    daily = [60, 60, 60, 60, 120, 120, 120]
+    days = [1, 2, 4, 5, 6, 7]
+    value = td.settimeleft_value(1800, daily, days, 3)
+    assert _left_after(value, daily, days, 3) == 1800
+
+
+def test_settimeleft_bounds():
+    daily = [60] * 7
+    assert td.settimeleft_value(99999, daily, td.ALL_DAYS, 2) == 3600  # capped
+    assert td.settimeleft_value(-5, daily, td.ALL_DAYS, 2) == 0
+    assert td.settimeleft_value(600, daily, [1, 2], 2) is None  # day not allowed
+
+
+def test_hours_gaps_and_full_hour_end():
+    assert not td.hours_have_gaps("8;9;10;11[00-30]")
+    assert not td.hours_have_gaps("7[30-59];8;9")
+    assert td.hours_have_gaps("7;8;17;18")
+    assert td.hours_have_gaps("8[00-30];9")
+    cfg = td.process_config({"ALLOWED_WEEKDAYS": "1", "ALLOWED_HOURS_ALL": "8;9[00-60]"})
+    assert cfg["minute_end"] == 59
+    assert cfg["hours_gap"] is False

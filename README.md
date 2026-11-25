@@ -183,6 +183,29 @@ data:
 
 ## Historique
 
+### v1.25.0
+
+Audit complet (logique Timekpr, intégration Home Assistant, carte).
+
+**Contrôle parental plus fiable**
+- **Fin du déblocage temporaire** : l'enfant récupérait toute sa journée (le temps déjà utilisé était oublié). Il retrouve maintenant le temps qui lui restait avant le déblocage, moins ce qu'il a utilisé pendant. Même correction en réactivant la limite quotidienne, et en choisissant un profil pendant un déblocage.
+- **Commandes dans le bon ordre** : les envois au PC passent un par un. Deux clics rapides pouvaient arriver dans le désordre et laisser une valeur intermédiaire sur le PC.
+- **File d'attente (PC éteint)** : un ancien réglage n'écrase plus un réglage plus récent au rallumage ; un « temps restant » mis en attente un jour n'est plus appliqué le lendemain ; un profil appliqué PC éteint se met en attente en quelques secondes (au lieu de plusieurs minutes) ; le compteur « Modifications en attente » se met à jour tout de suite.
+- **Minute de fin** : « + » sur 59 la faisait passer à 55 (temps retiré). Plage 0–59.
+- **Nouveaux modes de fin de temps** : fermer la session, forcer la fermeture.
+- Le profil affiché repasse à « Personnalisé » dès qu'un réglage est modifié à la main.
+
+**Connexion et sécurité**
+- Mot de passe refusé par le PC : Home Assistant propose de saisir les nouveaux identifiants (au lieu d'afficher « hors ligne » indéfiniment). Un mot de passe sudo refusé n'est plus pris pour un PC éteint.
+- Formulaires : mots de passe et clé masqués, jamais renvoyés au navigateur ; champ vide = valeur actuelle conservée. Port vérifié (1–65535), espaces retirés de l'adresse.
+- Changer l'adresse du PC dans les options ne fait plus perdre les profils, la file d'attente ni la clé du PC mémorisée.
+- PC mis en veille pendant un échange : détecté en ~45 s au lieu de plusieurs minutes. Le message « SSH failed » indique enfin le type d'erreur.
+
+**Carte**
+- Boutons +/- : la valeur s'affiche tout de suite et n'est envoyée qu'une fois, 0,7 s après le dernier clic.
+- Les listes déroulantes ne se referment plus toutes seules ; les erreurs (plage horaire invalide…) s'affichent.
+- Utilisable au clavier (profils, interrupteurs, jours) ; éditeur de carte qui ne perd plus le focus.
+
 ### v1.24.1
 
 - **Sécurité — mot de passe sudo hors des journaux** : il n'est plus écrit dans la ligne de commande (`echo '…' | sudo -S`) mais envoyé sur l'entrée de `sudo -S`. Avant, il apparaissait en clair dans le journal de Home Assistant (asyncssh journalise chaque commande au niveau INFO) et dans la liste des processus de la machine de l'enfant. **Après la mise à jour, changez ce mot de passe** : il peut figurer dans d'anciens journaux.

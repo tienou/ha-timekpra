@@ -102,6 +102,9 @@ class TimekpraSSH:
         self.host_key_saver: Any = None
         self._config_path: str | None = None
         self._time_path: str | None = None
+        # True after the machine refused our credentials (until a login
+        # succeeds): the coordinator then starts the re-auth flow.
+        self.auth_failed = False
 
     def set_host_key(self, host_key: str) -> None:
         """Set (or clear) the pinned host key."""
@@ -181,6 +184,10 @@ class TimekpraSSH:
             "known_hosts": self._known_hosts(),
             "login_timeout": 10,
             "connect_timeout": CONNECT_TIMEOUT,
+            # Detect a machine that went to sleep mid-session within ~45 s
+            # instead of waiting for the TCP timeout (minutes).
+            "keepalive_interval": 15,
+            "keepalive_count_max": 3,
         }
         if self._ssh_key:
             # Key-based auth: never send the password to the SSH layer.
@@ -200,21 +207,25 @@ class TimekpraSSH:
         lacks .stdout / .exit_status), whereas SSHClientProcess exposes
         stdout/stderr/returncode as stable properties.
         """
-        proc = await conn.create_process(command)
-        if self._sudo_password and command.startswith(_SUDO_STDIN):
-            # sudo -S reads the password from stdin (kept off the command
-            # line), then EOF so nothing downstream waits for more input.
-            proc.stdin.write(self._sudo_password + "\n")
-            proc.stdin.write_eof()
+        proc = None
         try:
             async with asyncio.timeout(COMMAND_TIMEOUT):
+                # Opening the channel is inside the timeout too: a machine
+                # that fell asleep must not block the coordinator.
+                proc = await conn.create_process(command)
+                if self._sudo_password and command.startswith(_SUDO_STDIN):
+                    # sudo -S reads the password from stdin (kept off the
+                    # command line), then EOF so nothing waits for more input.
+                    proc.stdin.write(self._sudo_password + "\n")
+                    proc.stdin.write_eof()
                 stdout_data = await proc.stdout.read()
                 stderr_data = await proc.stderr.read()
                 await proc.wait_closed()
         except TimeoutError:
             # TimeoutError is an OSError: callers treat it like "unreachable"
             # (queued for later) instead of hanging the refresh forever.
-            proc.close()
+            if proc is not None:
+                proc.close()
             raise
         if check and proc.returncode not in (0, None):
             err = (stderr_data or "").strip()
@@ -233,6 +244,7 @@ class TimekpraSSH:
             "key" if self._ssh_key else "password",
         )
         async with asyncssh.connect(host, **self._connect_kwargs()) as conn:
+            self.auth_failed = False
             if not self._host_key:
                 await self._learn_host_key(conn)
             return await self._run_on_conn(conn, command, check)
@@ -270,7 +282,8 @@ class TimekpraSSH:
             if conn is not None:
                 conn.close()
                 try:
-                    await conn.wait_closed()
+                    async with asyncio.timeout(5):
+                        await conn.wait_closed()
                 except Exception:  # noqa: BLE001
                     pass
 
@@ -283,6 +296,8 @@ class TimekpraSSH:
             except (asyncssh.PermissionDenied, asyncssh.HostKeyNotVerifiable) as err:
                 # Not a "machine off" situation: make it visible.
                 _LOGGER.error("SSH session refused by %s: %s", host, err)
+                if isinstance(err, asyncssh.PermissionDenied):
+                    self.auth_failed = True
                 continue
             except Exception as err:  # noqa: BLE001
                 _LOGGER.debug("SSH session connect failed on %s: %s", host, err)
@@ -290,6 +305,7 @@ class TimekpraSSH:
             if not self._host_key:
                 await self._learn_host_key(conn)
             _LOGGER.debug("SSH session opened to %s", host)
+            self.auth_failed = False
             return conn
         return None
 
@@ -318,6 +334,7 @@ class TimekpraSSH:
                 raise
             except asyncssh.PermissionDenied as err:
                 _LOGGER.error("SSH auth failed on %s: %s", host, err)
+                self.auth_failed = True
                 raise
             except asyncssh.HostKeyNotVerifiable as err:
                 # Fail closed: do NOT send credentials to an unverified host.
@@ -338,7 +355,11 @@ class TimekpraSSH:
                 _LOGGER.debug("SSH error on %s [%s]: %s", host, type(err).__name__, err)
                 last_err = err
 
-        _LOGGER.error("SSH failed on all hosts (%s): %s", ", ".join(hosts), last_err)
+        # str(TimeoutError()) is empty: always name the error type.
+        _LOGGER.error(
+            "SSH failed on all hosts (%s): %s %s",
+            ", ".join(hosts), type(last_err).__name__, last_err,
+        )
         raise last_err  # type: ignore[misc]
 
     async def test_connection(self) -> bool:
@@ -358,8 +379,17 @@ class TimekpraSSH:
         # Try known paths first
         for template in candidates:
             path = template.format(user=safe_user)
-            result = await self.execute(self._sudo(f"test -f {path}") + " && echo found")
-            if "found" in result:
+            # check=True + explicit "missing": a refused sudo (wrong password)
+            # now raises instead of looking like "file not found", which made
+            # an answering machine look offline and ran a filesystem search.
+            result = await self.execute(
+                self._sudo(
+                    f"sh -c 'if test -f {path}; then echo found; "
+                    "else echo missing; fi'"
+                ),
+                check=True,
+            )
+            if "found" in result.split():
                 _LOGGER.debug("Found file at known path: %s", path)
                 return path
         # Fallback: search the filesystem for the right extension and USE the

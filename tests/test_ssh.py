@@ -292,3 +292,25 @@ def test_hung_remote_command_times_out(monkeypatch):
         run(make()._run_on_conn(Conn(), "timekpra --userinfo 'x'", False))
     assert Proc.closed
     assert issubclass(TimeoutError, OSError)  # → queued as "offline"
+
+
+def test_refused_sudo_is_not_file_not_found():
+    """A wrong sudo password used to look like 'file missing' (machine shown
+    offline + filesystem search every 5 minutes)."""
+    ssh = make()
+    rec = Recorder(ssh, exc=ssh_mod.TimekpraCommandError("exit 1: sudo: incorrect password"))
+    with pytest.raises(ssh_mod.TimekpraCommandError):
+        run(ssh._find_path("camille", ssh_mod.CONFIG_PATHS))
+    assert len(rec.commands) == 1 and rec.commands[0][1] is True
+
+
+def test_find_path_reads_found_marker():
+    ssh = make()
+    Recorder(ssh, output="found\n")
+    path = run(ssh._find_path("camille", ssh_mod.CONFIG_PATHS))
+    assert path == "/var/lib/timekpr/config/timekpr.camille.conf"
+
+
+def test_connect_kwargs_keepalive():
+    kwargs = make(password="pw")._connect_kwargs()
+    assert kwargs["keepalive_interval"] > 0 and kwargs["keepalive_count_max"] > 0

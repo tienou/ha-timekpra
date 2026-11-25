@@ -24,6 +24,16 @@
           "ssh_key_passphrase": "Optional: passphrase protecting the private key.",
           "sudo_password": "Optional. Password for sudo on the remote machine. Leave empty if sudo is configured with NOPASSWD (typical with key authentication)."
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-enter the credentials",
+        "description": "The computer refused the SSH credentials for {user}. Enter the new ones (an empty field keeps the current value).",
+        "data": {
+          "ssh_password": "SSH Password",
+          "ssh_key": "SSH private key",
+          "ssh_key_passphrase": "Private key passphrase",
+          "sudo_password": "sudo Password"
+        }
       }
     },
     "error": {
@@ -34,7 +44,8 @@
       "invalid_user": "Invalid login name: letters, digits, '_', '-' and '.' only, not starting with '-'."
     },
     "abort": {
-      "already_configured": "This user is already configured."
+      "already_configured": "This user is already configured.",
+      "reauth_successful": "Credentials updated."
     }
   },
   "options": {
@@ -56,10 +67,10 @@
         "data_description": {
           "ssh_host_vpn": "Optional: IP address when connected via VPN",
           "auth_method": "Choose how to authenticate: SSH password or private key.",
-          "ssh_password": "Required when using password authentication. Also used for sudo.",
-          "ssh_key": "Paste the full private key (PEM/OpenSSH). Required when using key authentication.",
-          "ssh_key_passphrase": "Optional: passphrase protecting the private key.",
-          "sudo_password": "Optional. Password for sudo on the remote machine. Leave empty if sudo is configured with NOPASSWD (typical with key authentication)."
+          "ssh_password": "Required when using password authentication. Also used for sudo. Leave empty to keep the current value.",
+          "ssh_key": "Paste the full private key (PEM/OpenSSH). Required when using key authentication. Leave empty to keep the current value.",
+          "ssh_key_passphrase": "Optional: passphrase protecting the private key. Leave empty to keep the current value.",
+          "sudo_password": "Optional. Password for sudo on the remote machine. Leave empty if sudo is configured with NOPASSWD (typical with key authentication). Leave empty to keep the current value."
         }
       }
     },
@@ -68,7 +79,8 @@
       "password_required": "A password is required for password authentication.",
       "key_required": "A private key is required for key authentication.",
       "invalid_key": "The private key could not be read. Check its format and passphrase.",
-      "invalid_user": "Invalid login name: letters, digits, '_', '-' and '.' only, not starting with '-'."
+      "invalid_user": "Invalid login name: letters, digits, '_', '-' and '.' only, not starting with '-'.",
+      "already_configured": "This user is already configured."
     }
   },
   "entity": {
@@ -181,6 +193,8 @@
         "state": {
           "lock": "Lock",
           "suspend": "Suspend",
+          "terminate": "Log out",
+          "kill": "Force log out",
           "shutdown": "Shut down"
         }
       },
@@ -237,6 +251,12 @@
   "exceptions": {
     "invalid_hour_range": {
       "message": "Invalid allowed hours: the start ({start}) must be before the end ({end})."
+    },
+    "profile_not_found": {
+      "message": "Profile \"{name}\" not found."
+    },
+    "reserved_profile": {
+      "message": "\"{name}\" is a built-in profile and cannot be saved or deleted."
     }
   }
 }

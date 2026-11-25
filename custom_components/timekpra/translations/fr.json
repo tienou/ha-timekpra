@@ -24,6 +24,16 @@
           "ssh_key_passphrase": "Optionnel : phrase secrète protégeant la clé privée.",
           "sudo_password": "Optionnel. Mot de passe pour sudo sur la machine distante. Laissez vide si sudo est configuré en NOPASSWD (cas typique avec une clé)."
         }
+      },
+      "reauth_confirm": {
+        "title": "Saisir de nouveau les identifiants",
+        "description": "L'ordinateur a refusé les identifiants SSH pour {user}. Saisissez les nouveaux (un champ vide garde la valeur actuelle).",
+        "data": {
+          "ssh_password": "Mot de passe SSH",
+          "ssh_key": "Clé privée SSH",
+          "ssh_key_passphrase": "Phrase secrète de la clé",
+          "sudo_password": "Mot de passe sudo"
+        }
       }
     },
     "error": {
@@ -34,7 +44,8 @@
       "invalid_user": "Nom de login invalide : lettres, chiffres, « _ », « - » et « . » uniquement, sans « - » au début."
     },
     "abort": {
-      "already_configured": "Cet utilisateur est déjà configuré."
+      "already_configured": "Cet utilisateur est déjà configuré.",
+      "reauth_successful": "Identifiants mis à jour."
     }
   },
   "options": {
@@ -56,10 +67,10 @@
         "data_description": {
           "ssh_host_vpn": "Optionnel : adresse IP quand connecté au VPN",
           "auth_method": "Choisissez l'authentification : mot de passe SSH ou clé privée.",
-          "ssh_password": "Requis pour l'authentification par mot de passe. Sert aussi pour sudo.",
-          "ssh_key": "Collez la clé privée complète (PEM/OpenSSH). Requise pour l'authentification par clé.",
-          "ssh_key_passphrase": "Optionnel : phrase secrète protégeant la clé privée.",
-          "sudo_password": "Optionnel. Mot de passe pour sudo sur la machine distante. Laissez vide si sudo est configuré en NOPASSWD (cas typique avec une clé)."
+          "ssh_password": "Requis pour l'authentification par mot de passe. Sert aussi pour sudo. Laissez vide pour garder la valeur actuelle.",
+          "ssh_key": "Collez la clé privée complète (PEM/OpenSSH). Requise pour l'authentification par clé. Laissez vide pour garder la valeur actuelle.",
+          "ssh_key_passphrase": "Optionnel : phrase secrète protégeant la clé privée. Laissez vide pour garder la valeur actuelle.",
+          "sudo_password": "Optionnel. Mot de passe pour sudo sur la machine distante. Laissez vide si sudo est configuré en NOPASSWD (cas typique avec une clé). Laissez vide pour garder la valeur actuelle."
         }
       }
     },
@@ -68,7 +79,8 @@
       "password_required": "Un mot de passe est requis pour l'authentification par mot de passe.",
       "key_required": "Une clé privée est requise pour l'authentification par clé.",
       "invalid_key": "Impossible de lire la clé privée. Vérifiez son format et sa phrase secrète.",
-      "invalid_user": "Nom de login invalide : lettres, chiffres, « _ », « - » et « . » uniquement, sans « - » au début."
+      "invalid_user": "Nom de login invalide : lettres, chiffres, « _ », « - » et « . » uniquement, sans « - » au début.",
+      "already_configured": "Cet utilisateur est déjà configuré."
     }
   },
   "entity": {
@@ -181,6 +193,8 @@
         "state": {
           "lock": "Verrouiller",
           "suspend": "Mettre en veille",
+          "terminate": "Fermer la session",
+          "kill": "Forcer la fermeture de session",
           "shutdown": "Éteindre"
         }
       },
@@ -237,6 +251,12 @@
   "exceptions": {
     "invalid_hour_range": {
       "message": "Plage horaire invalide : le début ({start}) doit précéder la fin ({end})."
+    },
+    "profile_not_found": {
+      "message": "Profil « {name} » introuvable."
+    },
+    "reserved_profile": {
+      "message": "« {name} » est un profil intégré : il ne peut pas être enregistré ni supprimé."
     }
   }
 }
